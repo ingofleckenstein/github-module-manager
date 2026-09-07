@@ -1,0 +1,12 @@
+/.local/
+/vendor/
+/runtime/
+/coverage/
+/.idea/
+/.vs/
+/.vscode/
+.env
+*.log
+*.sql
+*.zip
+*.pid
