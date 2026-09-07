@@ -58,7 +58,7 @@ Die isolierte Suite prüft URL-/Branch-Validierung, ZIP-Grenzen, Traversal, Syml
 
 Die vollständige Testfolge auf einer bewusst ausgewählten lokalen HumHub-/MariaDB-Instanz ist in [tests/README.md](tests/README.md) beschrieben. Sie installiert und aktualisiert ausschließlich ein Testmodul und räumt dessen Daten anschließend auf. Die aktuelle Abnahme steht in [TEST-REPORT.md](docs/TEST-REPORT.md); Architekturentscheidungen und geprüfte Core-APIs in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Dieses Repository wurde lokal für Git vorbereitet. Es ist kein GitHub-Remote vorausgesetzt; Veröffentlichung und Push erfolgen durch den Betreiber.
+Quellcode und Fehlerberichte: [ingofleckenstein/github-module-manager](https://github.com/ingofleckenstein/github-module-manager). Das Repository ist öffentlich. Die lokale Testumgebung und ihre Zugangsdaten sind nicht Bestandteil dieses Repositories.
 
 ## Lizenz
 

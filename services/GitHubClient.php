@@ -52,7 +52,7 @@ class GitHubClient implements RepositoryProviderInterface
             $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
             if ($bytes > $limit) throw new Failure('Download exceeds the configured size limit.');
             if ($status === 403 || $status === 429) throw new Failure('GitHub rate limit or access restriction reached. Try again later.');
-            if ($status === 404) throw new Failure('Public repository or branch was not found.');
+            if ($status === 404) throw new Failure('Repository or branch not found (GitHub 404). The repository may be private or the address may be incorrect. This version supports only public repositories; signing in to GitHub in your browser does not grant the module access.');
             if ($ok === false || $status !== 200) throw new Failure('GitHub download failed or timed out.');
             return $body;
         } finally {
