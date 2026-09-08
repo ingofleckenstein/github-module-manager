@@ -20,17 +20,19 @@ use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInte
 use humhub\modules\githubmodulemanager\models\{Repository,UpdateLog};
 class FixtureProvider implements RepositoryProviderInterface
 {
-    public int $generation=1; public bool $failDownload=false;
+    public int $generation=1; public bool $failDownload=false; public string $moduleId='gmm-fixture'; public ?string $version=null;
     public function repository(array $r,bool $refresh=false): array { return ['private'=>false,'default_branch'=>'main']; }
     public function branches(array $r,bool $refresh=false): array { return ['main','feature/test']; }
     public function commit(array $r,string $branch,bool $refresh=false): string { return str_repeat((string)$this->generation,40); }
     public function download(array $r,string $sha,string $destination): void
     {
         if ($this->failDownload) throw new Failure('GitHub download failed or timed out.');
+        $id=$this->moduleId; $version=$this->version ?? ($this->generation===1 ? '0.1.2' : '0.1.3');
+        $namespace=$id === Workflow::MANAGER_ID ? 'humhub\\modules\\githubmodulemanager' : 'humhub\\modules\\gmmfixture';
         $zip=new ZipArchive(); $zip->open($destination,ZipArchive::CREATE);
-        $zip->addFromString('wrapper/module.json',json_encode(['id'=>'gmm-fixture','name'=>'GMM test fixture','version'=>$this->generation===1 ? '1.0.0' : '1.0.1','humhub'=>['minVersion'=>'1.18.5']]));
-        $zip->addFromString('wrapper/config.php',"<?php return ['id'=>'gmm-fixture','class'=>'humhub\\\\modules\\\\gmmfixture\\\\Module','namespace'=>'humhub\\\\modules\\\\gmmfixture'];");
-        $zip->addFromString('wrapper/Module.php',"<?php namespace humhub\\modules\\gmmfixture; class Module extends \\humhub\\components\\Module {}\n");
+        $zip->addFromString('wrapper/module.json',json_encode(['id'=>$id,'name'=>'GMM test fixture','version'=>$version,'humhub'=>['minVersion'=>'1.18.5']]));
+        $zip->addFromString('wrapper/config.php',"<?php return ['id'=>'$id','class'=>'$namespace\\\\Module','namespace'=>'$namespace'];");
+        $zip->addFromString('wrapper/Module.php',"<?php namespace $namespace; class Module extends \\humhub\\components\\Module {}\n");
         $zip->addFromString('wrapper/revision.txt',(string)$this->generation);
         $migration1 = <<<'CODE'
 <?php class m260907_120001_fixture extends \yii\db\Migration {
@@ -56,6 +58,7 @@ $provider=new FixtureProvider(); $workflow=new Workflow($provider); $url='https:
 $target=(new Paths())->target('gmm-fixture');
 if (file_exists($target) || Repository::findOne(['module_id'=>'gmm-fixture'])) throw new RuntimeException('Remove previous gmm-fixture test artifacts before running');
 $runtime=(new Paths())->runtime();
+$selfFixtureCreated=false;
 try {
     $managerTarget=(new Paths())->managerTarget();
     ensure($managerTarget===realpath($app->getModule('github-module-manager')->getBasePath()),'Manager target is the loaded module path');
@@ -70,7 +73,7 @@ try {
     $p=$workflow->inspect($url,'main',$r); $r=$workflow->install($p['token'],false);
     ensure($app->db->schema->getTableSchema('{{%gmm_fixture_probe}}',true)->getColumn('note')!==null,'Update migration applied');
     ensure(count(glob($runtime.'/backups/gmm-fixture/*',GLOB_ONLYDIR))===1,'Backup exists');
-    $provider->generation=3; $workflow->check($r); $r->refresh(); ensure($r->status==='update_available','Same version with changed SHA detected');
+    $provider->generation=3; $workflow->check($r); $r->refresh(); ensure($r->status==='different_commit','Same version with changed SHA is distinguished');
     $p=$workflow->inspect($url,'main',$r); $r=$workflow->install($p['token'],false);
     $before=Files::hash($target); $provider->failDownload=true;
     try { $workflow->inspect($url,'main',$r); throw new RuntimeException('Expected failed download'); } catch (Failure $e) { ensure(Files::hash($target)===$before,'Download failure leaves files intact'); }
@@ -92,6 +95,13 @@ try {
     $p=$workflow->inspect($url,'main');
     $r=$workflow->attach($p['token']);
     ensure($r->installed_commit_sha===null && Files::hash($target)===$before,'Existing module mapping preserves files and unknown SHA');
+    $workflow->check($r); $r->refresh(); ensure($r->status==='current','Unknown SHA with equal module versions is current');
+    $metadata=json_decode(file_get_contents($target.'/module.json'),true); $metadata['version']='0.1.4'; file_put_contents($target.'/module.json',json_encode($metadata));
+    $workflow->rescan($r); $r->refresh(); ensure($r->installed_version==='0.1.4','Local rescan reads a changed module.json');
+    if (Repository::findOne(['module_id'=>Workflow::MANAGER_ID])) throw new RuntimeException('Manager self-update mapping already exists; preserve it and run this test in a clean test installation.');
+    $provider->moduleId=Workflow::MANAGER_ID; $provider->version='0.1.5';
+    $self=$workflow->configureSelf('https://github.com/example/github-module-manager','main'); $selfFixtureCreated=true;
+    $workflow->check($self); $self->refresh(); ensure($self->status==='update_available','Manager self-repository is checked through the protected path');
     $controller=new \humhub\modules\githubmodulemanager\controllers\AdminController('admin',$app->getModule('github-module-manager'));
     $access=$controller->behaviors()['access']['rules'][0]['matchCallback'];
     ensure($access(),'System administrator allowed');
@@ -103,6 +113,7 @@ try {
     if (is_dir($target)) Files::remove($target);
     foreach (['backups/gmm-fixture','operations/gmm-fixture.json'] as $relative) Files::remove($runtime.'/'.$relative);
     Repository::deleteAll(['module_id'=>'gmm-fixture']); UpdateLog::deleteAll(['module_id'=>'gmm-fixture']);
+    if ($selfFixtureCreated) { Repository::deleteAll(['module_id'=>Workflow::MANAGER_ID]); UpdateLog::deleteAll(['module_id'=>Workflow::MANAGER_ID]); }
     $app->db->createCommand('DROP TABLE IF EXISTS {{%gmm_fixture_probe}}')->execute();
     $app->db->createCommand()->delete('{{%migration}}',['like','version','%m260907_12000%',false])->execute();
     $app->cache->flush();

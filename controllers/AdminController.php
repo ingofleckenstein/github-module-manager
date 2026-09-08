@@ -15,7 +15,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
             'access'=>['class'=>AccessControl::class,'rules'=>[['allow'=>true,'roles'=>['@'],'matchCallback'=>static fn()=>Yii::$app->user->identity->isSystemAdmin()]]],
             'verbs'=>['class'=>VerbFilter::class,'actions'=>[
                 'discover'=>['POST'],'inspect'=>['POST'],'install'=>['POST'],'attach'=>['POST'],
-                'check'=>['POST'],'check-all'=>['POST'],'detach'=>['POST'],'settings'=>['POST'],
+                'check'=>['POST'],'check-all'=>['POST'],'rescan'=>['POST'],'rescan-all'=>['POST'],'detach'=>['POST'],'settings'=>['POST'],
                 'index'=>['GET'],'add'=>['GET'],'view'=>['GET'],'confirm'=>['GET'],
             ]],
         ];
@@ -83,7 +83,18 @@ class AdminController extends \humhub\modules\admin\components\Controller
     }
     public function actionCheck(int $id)
     {
-        try { (new Workflow())->check($this->repository($id)); return $this->redirect(['view','id'=>$id]); }
+        try {
+            $r=(new Workflow())->check($this->repository($id));
+            $message=match ($r->status) {
+                'update_available'=>'Update check completed. Version {version} is available.',
+                'current'=>'Update check completed. The module is current.',
+                'different_commit'=>'Update check completed. The module has the same version but a different commit.',
+                'local_changes'=>'Update check completed. Local changes were detected.',
+                default=>'Update check completed.',
+            };
+            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base',$message,['version'=>$r->last_remote_version]));
+            return $this->redirect(['view','id'=>$id]);
+        }
         catch (\Throwable $e) { return $this->error($e,['view','id'=>$id]); }
     }
     public function actionCheckAll()
@@ -93,6 +104,23 @@ class AdminController extends \humhub\modules\admin\components\Controller
             try { $workflow->check($r); } catch (\Throwable $e) { ++$failures; }
         }
         Yii::$app->session->setFlash($failures ? 'warning' : 'success',Yii::t('GithubModuleManagerModule.base','Update checks finished. Failed checks: {count}',['count'=>$failures]));
+        return $this->redirect(['index']);
+    }
+    public function actionRescan(int $id)
+    {
+        try {
+            (new Workflow())->rescan($this->repository($id));
+            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base','Local module data was re-read.'));
+            return $this->redirect(['view','id'=>$id]);
+        } catch (\Throwable $e) { return $this->error($e,['view','id'=>$id]); }
+    }
+    public function actionRescanAll()
+    {
+        $workflow=new Workflow(); $updated=0; $failures=0;
+        foreach (Repository::find()->all() as $r) {
+            try { $workflow->rescan($r); ++$updated; } catch (\Throwable $e) { ++$failures; }
+        }
+        Yii::$app->session->setFlash($failures ? 'warning' : 'success',Yii::t('GithubModuleManagerModule.base','Local module data was re-read. Updated: {updated}, failed: {failed}.',['updated'=>$updated,'failed'=>$failures]));
         return $this->redirect(['index']);
     }
     public function actionDetach(int $id)

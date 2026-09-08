@@ -7,6 +7,7 @@ $t=static fn($s,$p=[])=>Yii::t('GithubModuleManagerModule.base',$s,$p);
 <p><?= Html::encode($t('Manage trusted public GitHub branches. Installation does not activate modules.')) ?></p>
 <?= Html::a(Html::encode($t('Add repository')),['add'],['class'=>'btn btn-primary']) ?>
 <?= Html::beginForm(['check-all'],'post',['style'=>'display:inline']) ?><?= Html::submitButton(Html::encode($t('Check all for updates')),['class'=>'btn btn-default']) ?><?= Html::endForm() ?>
+<?= Html::beginForm(['rescan-all'],'post',['style'=>'display:inline']) ?><?= Html::submitButton(Html::encode($t('Re-read local data')),['class'=>'btn btn-default']) ?><?= Html::endForm() ?>
 <div class="table-responsive"><table class="table"><thead><tr>
 <?php foreach (['Module','Installed','Repository','Branch','Remote','Status','Action'] as $label): ?><th scope="col"><?= Html::encode($t($label)) ?></th><?php endforeach ?>
 </tr></thead><tbody>

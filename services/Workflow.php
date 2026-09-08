@@ -106,6 +106,47 @@ class Workflow
         $r->channel_type='branch'; $r->channel_value=$p['branch']; $r->module_path=$p['target'];
         $r->last_remote_version=$p['info']['version']; $r->last_remote_commit_sha=$p['sha']; $r->last_checked_at=time();
     }
+    /** Read the installed module again without treating an unverified SHA as provenance. */
+    private function local(Repository $r): array
+    {
+        $selfUpdate=$this->isSelf($r);
+        $target=$this->paths->target($r->module_id,$r->module_path ?: null,$selfUpdate);
+        $info=(new ModuleValidator())->inspect($target,$selfUpdate);
+        if ($info['id'] !== $r->module_id) throw new Failure('Repository module ID does not match the local module.');
+        $hash=Files::hash($target);
+        $changed=$r->file_hash !== null && !hash_equals($r->file_hash,$hash);
+        return ['info'=>$info,'target'=>$target,'hash'=>$hash,'changed'=>$changed];
+    }
+    private function status(string $localVersion, ?string $remoteVersion, ?string $installedSha, ?string $remoteSha, bool $localChanges = false): string
+    {
+        if ($localChanges) return 'local_changes';
+        if (!$remoteVersion) return 'unknown';
+        $comparison=version_compare($localVersion,$remoteVersion);
+        if ($comparison < 0) return 'update_available';
+        if ($comparison === 0 && (!$installedSha || !$remoteSha || hash_equals($installedSha,$remoteSha))) return 'current';
+        return 'different_commit';
+    }
+    /** Refresh only values that can be derived from the installed module. */
+    public function rescan(Repository $r): Repository
+    {
+        $lock=new Lock($this->paths->runtime(),$r->module_id);
+        if (file_exists($this->paths->runtime().'/operations/'.$r->module_id.'.json')) throw new Failure('A previous operation needs manual recovery. See the operation journal.');
+        try {
+            $local=$this->local($r);
+            $previousVersion=$r->installed_version;
+            $r->installed_version=$local['info']['version']; $r->module_path=$local['target']; $r->file_hash=$local['hash'];
+            // A previously verified commit remains trustworthy only while its exact file fingerprint remains unchanged.
+            if ($local['changed']) $r->installed_commit_sha=null;
+            $r->status=$this->status($r->installed_version,$r->last_remote_version,$r->installed_commit_sha,$r->last_remote_commit_sha);
+            if (!$r->save(false)) throw new Failure('Repository mapping could not be saved.');
+            $this->log(['info'=>$local['info'],'source'=>$r->source(),'branch'=>$r->channel_value,'sha'=>$r->installed_commit_sha,'local'=>['version'=>$previousVersion]],'rescan','success');
+            return $r;
+        } catch (\Throwable $e) {
+            $r->status='error'; $r->save(false,['status']);
+            Yii::error(['module'=>$r->module_id,'phase'=>'rescan','result'=>'error','type'=>get_class($e),'message'=>$e instanceof Failure ? $e->key : 'Unexpected operation error. Review the operation journal and server log.'],'github-module-manager');
+            throw $e;
+        }
+    }
     public function attach(string $token): Repository
     {
         $p=$this->preview($token); $lock=new Lock($this->paths->runtime(),$p['info']['id']);
@@ -160,7 +201,7 @@ class Workflow
             if (is_dir($dir)) Files::remove($dir);
         }
     }
-    public function check(Repository $r): void
+    public function check(Repository $r): Repository
     {
         $lock=new Lock($this->paths->runtime(),$r->module_id);
         if (file_exists($this->paths->runtime().'/operations/'.$r->module_id.'.json')) throw new Failure('A previous operation needs manual recovery. See the operation journal.');
@@ -168,8 +209,12 @@ class Workflow
         try {
             $p=$this->inspect($r->repository_url,$r->channel_value,$r,true);
             $r->last_remote_version=$p['info']['version']; $r->last_remote_commit_sha=$p['sha']; $r->last_checked_at=time();
-            $r->status=$p['localChanges'] ? 'local_changes' : ($r->installed_commit_sha === $p['sha'] ? 'current' : 'update_available');
+            // Always use the currently installed module.json. An unknown SHA is not evidence of an update.
+            $r->installed_version=$p['local']['version']; $r->module_path=$p['target']; $r->file_hash=$p['localHash'];
+            if ($p['localChanges']) $r->installed_commit_sha=null;
+            $r->status=$this->status($r->installed_version,$r->last_remote_version,$r->installed_commit_sha,$r->last_remote_commit_sha,$p['localChanges']);
             $r->save(false); $this->log($p,'check','success'); Files::remove(dirname($p['module'],2));
+            return $r;
         } catch (\Throwable $e) {
             $r->status='error'; $r->last_checked_at=time(); $r->save(false);
             $failure=['info'=>['id'=>$r->module_id,'version'=>$r->last_remote_version], 'source'=>$r->source(), 'branch'=>$r->channel_value, 'sha'=>$r->last_remote_commit_sha, 'local'=>['version'=>$r->installed_version]];

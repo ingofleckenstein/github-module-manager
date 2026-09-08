@@ -2,7 +2,7 @@
 
 Dieses **HumHub-Modul** ermöglicht Systemadministrator*innen, Module aus **öffentlichen GitHub-Repositories** zu prüfen, zu installieren und anhand neuer Branch-Commits zu aktualisieren. Es wird in HumHub installiert und ist kein PeerTube-Plugin.
 
-Version **0.1.3**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+Version **0.1.4**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
 
 ## Funktionsumfang
 
@@ -11,6 +11,8 @@ Version **0.1.3**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2
 - Unveränderlichen Commit-SHA für Download und Bestätigung verwenden; kein unbemerktes Nachrücken auf einen neueren Branchstand.
 - Neuinstallation und Zuordnung bereits vorhandener Custom-Module; bei einer Zuordnung wird keine unbekannte lokale SHA als bestätigt ausgegeben.
 - Manuelle Einzel- und Gesamtprüfung, Status, Details und Updatehistorie mit Admin-ID.
+- Die Prüfung liest die lokale `module.json` erneut: Eine fehlende bestätigte SHA bedeutet bei gleicher Version nicht fälschlich ein Update. Gleiche Versionen mit abweichender bestätigter SHA werden als anderer Commit ausgewiesen; neue lokale Dateifingerabdrücke als lokale Änderungen.
+- Lokale Moduldaten lassen sich einzeln oder gesammelt neu einlesen, ohne zuletzt gelesene Remote-Daten zu überschreiben.
 - Datei-Backup, vollständiges Staging, Verzeichnistausch auf demselben Dateisystem und Wiederherstellung bei abgefangenen Fehlern.
 - Migrationen über HumHubs `MigrationService`, Bereinigung von Modul-, Anwendungs- und Asset-Cache sowie OPCache. Ausstehende HumHub-Core-Migrationen blockieren einen Modulupdate vor dem Dateiaustausch mit einem erklärenden Hinweis.
 - Bereits beim Start registrierte Module werden bei einem Update nicht ein zweites Mal im selben Request registriert. Dadurch bleiben zwischengespeicherte Modulkonfigurationen und Event-Handler beim Dateiaustausch stabil; der bereinigte Cache wird im folgenden Request neu geladen.

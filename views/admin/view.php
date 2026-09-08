@@ -8,6 +8,7 @@ $t=static fn($s)=>Yii::t('GithubModuleManagerModule.base',$s); $r=$repository;
 <p><?= Html::a(Html::encode($r->repository_url),$r->repository_url,['rel'=>'noopener noreferrer','target'=>'_blank']) ?></p>
 <?php if ($r->module_id === 'github-module-manager'): ?><p class="alert alert-warning"><?= Html::encode($t('This update replaces the running manager only after review. The new code is used from the next request; keep the generated backup until it has been checked.')) ?></p><?php endif ?>
 <?= Html::beginForm(['check','id'=>$r->id],'post',['style'=>'display:inline']) ?><?= Html::submitButton(Html::encode($t('Check for updates')),['class'=>'btn btn-default']) ?><?= Html::endForm() ?>
+<?= Html::beginForm(['rescan','id'=>$r->id],'post',['style'=>'display:inline']) ?><?= Html::submitButton(Html::encode($t('Re-read local data')),['class'=>'btn btn-default']) ?><?= Html::endForm() ?>
 <?= Html::beginForm(['inspect'],'post',['style'=>'display:inline']) ?><?= Html::hiddenInput('id',$r->id) ?><?= Html::hiddenInput('url',$r->repository_url) ?><?= Html::hiddenInput('branch',$r->channel_value) ?><?= Html::submitButton(Html::encode($t('Review update')),['class'=>'btn btn-primary']) ?><?= Html::endForm() ?>
 <?php if ($r->module_id !== 'github-module-manager'): ?>
 <?= Html::a(Html::encode($t('Change repository')),['add','id'=>$r->id],['class'=>'btn btn-default']) ?>
