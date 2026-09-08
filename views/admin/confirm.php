@@ -9,7 +9,7 @@ $t=static fn($s)=>Yii::t('GithubModuleManagerModule.base',$s);
 <p><?= Html::encode($t('A valid HumHub module was found. No module files have been installed yet.')) ?></p>
 <?php foreach ($p['warnings'] as $warning): ?><p class="alert alert-warning"><?= Html::encode($t($warning)) ?></p><?php endforeach ?>
 <?php if ($p['localChanges']): ?><p class="alert alert-warning"><?= Html::encode($t('Local changes detected. Updating will replace them.')) ?></p><?php endif ?>
-<?php if ($p['local']): ?>
+<?php if ($p['local'] && empty($p['selfUpdate'])): ?>
 <?= Html::beginForm(['attach'],'post') ?><?= Html::hiddenInput('token',$p['token']) ?><p><?= Html::encode($t('Mapping changes no module files. The installed commit remains unknown until a controlled update.')) ?></p><?= Html::submitButton(Html::encode($t('Save repository mapping only')),['class'=>'btn btn-default']) ?><?= Html::endForm() ?>
 <?php endif ?>
 <?php if (!$p['local'] || $p['repositoryId']): ?>

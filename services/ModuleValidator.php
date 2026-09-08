@@ -4,7 +4,12 @@ namespace humhub\modules\githubmodulemanager\services;
 
 class ModuleValidator
 {
-    public function inspect(string $path): array
+    /**
+     * The manager ID is accepted only by Workflow after it has verified that
+     * the target is this installed manager.  It must remain protected for all
+     * ordinary repository imports.
+     */
+    public function inspect(string $path, bool $allowManager = false): array
     {
         foreach (['module.json', 'Module.php', 'config.php'] as $file) {
             if (!is_file($path . '/' . $file) || is_link($path . '/' . $file)) throw new Failure('Required module file is missing: {file}', ['file'=>$file]);
@@ -14,7 +19,7 @@ class ModuleValidator
         catch (\JsonException $e) { throw new Failure('Invalid module metadata.'); }
         if (!is_array($info)) throw new Failure('Invalid module metadata.');
         foreach (['id','name','version'] as $field) if (!isset($info[$field]) || !is_string($info[$field]) || $info[$field] === '' || strlen($info[$field]) > 255) throw new Failure('Invalid module metadata.');
-        self::id($info['id']);
+        self::id($info['id'], $allowManager);
         if (!preg_match('/^[0-9]+(?:\.[0-9]+)*(?:[-+][a-zA-Z0-9.-]+)?$/D', $info['version'])) throw new Failure('Invalid module version.');
         // Tokenize only. Never include/evaluate a downloaded config during inspection.
         $tokens = token_get_all(file_get_contents($path . '/config.php'), TOKEN_PARSE);
@@ -35,9 +40,10 @@ class ModuleValidator
         token_get_all(file_get_contents($path . '/Module.php'), TOKEN_PARSE);
         return $info;
     }
-    public static function id(string $id): void
+    public static function id(string $id, bool $allowManager = false): void
     {
-        if (!preg_match('/^[a-z][a-z0-9-]{0,99}$/D', $id) || in_array($id, ['github-module-manager','app','web','webroot','runtime','vendor','humhub','yii','bower','npm','web-static','webroot-static'], true)) throw new Failure('Invalid or protected module ID.');
+        $protected = ['github-module-manager','app','web','webroot','runtime','vendor','humhub','yii','bower','npm','web-static','webroot-static'];
+        if (!preg_match('/^[a-z][a-z0-9-]{0,99}$/D', $id) || (in_array($id, $protected, true) && !($allowManager && $id === 'github-module-manager'))) throw new Failure('Invalid or protected module ID.');
     }
     public function compatibility(array $info, string $path, string $humhubVersion): array
     {

@@ -34,12 +34,16 @@ class AdminController extends \humhub\modules\admin\components\Controller
     }
     public function actionAdd($id=null)
     {
-        return $this->render('add',['repository'=>$id ? $this->repository($id) : null,'discovery'=>null]);
+        try {
+            $repository=$id ? $this->repository($id) : null;
+            $this->assertNotSelfRepository($repository);
+            return $this->render('add',['repository'=>$repository,'discovery'=>null]);
+        } catch (Throwable $e) { return $this->error($e,['index']); }
     }
     public function actionDiscover()
     {
         try {
-            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null;
+            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null; $this->assertNotSelfRepository($repository);
             $discovery=(new Workflow())->discover((string)Yii::$app->request->post('url'));
             return $this->render('add',['repository'=>$repository,'discovery'=>$discovery]);
         } catch (\Throwable $e) { return $this->error($e,['add']); }
@@ -47,7 +51,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
     public function actionInspect()
     {
         try {
-            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null;
+            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null; $this->assertNotSelfRepository($repository);
             $p=(new Workflow())->inspect((string)Yii::$app->request->post('url'),(string)Yii::$app->request->post('branch'),$repository,true);
             return $this->redirect(['confirm','token'=>$p['token']]);
         } catch (\Throwable $e) { return $this->error($e,['index']); }
@@ -62,7 +66,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
         try {
             if (Yii::$app->request->post('trust') !== '1') throw new Failure('Confirm that you trust this repository and have a database backup.');
             $r=(new Workflow())->install((string)Yii::$app->request->post('token'),Yii::$app->request->post('localChanges') === '1');
-            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base','Module files installed and migrations completed. Activation remains unchanged; new modules can be enabled under Administration → Modules.'));
+            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base',$r->module_id === Workflow::MANAGER_ID ? 'Manager self-update installed. The new version will be used on the next request.' : 'Module files installed and migrations completed. Activation remains unchanged; new modules can be enabled under Administration → Modules.'));
             return $this->redirect(['view','id'=>$r->id]);
         } catch (\Throwable $e) { return $this->error($e,['index']); }
     }
@@ -93,7 +97,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
     }
     public function actionDetach(int $id)
     {
-        try { (new Workflow())->detach($this->repository($id)); return $this->redirect(['index']); }
+        try { $repository=$this->repository($id); $this->assertNotSelfRepository($repository); (new Workflow())->detach($repository); return $this->redirect(['index']); }
         catch (\Throwable $e) { return $this->error($e,['view','id'=>$id]); }
     }
     public function actionSettings()
@@ -107,15 +111,20 @@ class AdminController extends \humhub\modules\admin\components\Controller
             }
             $transaction=Yii::$app->db->beginTransaction();
             try {
+                $self = (new Workflow())->configureSelf((string)Yii::$app->request->post('selfRepositoryUrl'), (string)Yii::$app->request->post('selfBranch'));
                 foreach ($values as $key=>$value) $this->module->settings->set($key,$value);
                 $transaction->commit();
             } catch (\Throwable $error) { $transaction->rollBack(); throw $error; }
-            return $this->redirect(['index']);
+            return $this->redirect($self ? ['view','id'=>$self->id] : ['index']);
         } catch (\Throwable $e) { return $this->error($e,['index']); }
     }
     private function repository($id): Repository
     {
         $r=Repository::findOne((int)$id); if (!$r) throw new NotFoundHttpException(); return $r;
+    }
+    private function assertNotSelfRepository(?Repository $repository): void
+    {
+        if ($repository && $repository->module_id === Workflow::MANAGER_ID) throw new Failure('Manager self-update repository can only be changed in settings.');
     }
     private function error(\Throwable $e,array $route)
     {

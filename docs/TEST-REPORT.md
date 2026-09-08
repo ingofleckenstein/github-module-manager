@@ -4,7 +4,7 @@ Umgebung: HumHub CE 1.18.5 aus dem offiziellen Installationspaket, PHP 8.3.6, Ma
 
 ## Automatisierte Prüfungen
 
-- 86 isolierte Serviceprüfungen: gültige und ungültige Repository-/Branch-Adressen; SSRF-Hostgrenzen; ZIP-Traversal einschließlich Windows-Pfaden; Symlinks; defekte, zu große und unvollständige Archive; eindeutige Modul-ID; PHP-freie Inspektion; Composer-Abweisung; Neuinstallation; Update; Backup; Schreibrechte; lokaler Fingerabdruck; parallele Updates; Austausch- und Migrationsfehler; Wiederherstellung und persistenter Wiederherstellungsstatus.
+- 88 isolierte Serviceprüfungen: gültige und ungültige Repository-/Branch-Adressen; SSRF-Hostgrenzen; ZIP-Traversal einschließlich Windows-Pfaden; Symlinks; defekte, zu große und unvollständige Archive; eindeutige Modul-ID; PHP-freie Inspektion; Composer-Abweisung; Neuinstallation; Update; Backup; Schreibrechte; lokaler Fingerabdruck; parallele Updates; Austausch- und Migrationsfehler; Wiederherstellung und persistenter Wiederherstellungsstatus; Schutz der Manager-ID außerhalb des expliziten Selbstupdate-Modus.
 - 21 HumHub-/MariaDB-Integrationsprüfungen: temporäres Fixture-Modul innerhalb der dauerhaften Testcommunity, danach gezielte Entfernung der Testartefakte. Neuinstallation, HumHub-Erkennung, deaktivierter Zustand, echte Initial-/Update-Migrationen, SHA-basierte Erkennung auch bei gleicher Modulversion, Backup, Fehlerpfade und Auditdaten geprüft.
 - PHP-Syntax aller Modul- und Testdateien geprüft.
 

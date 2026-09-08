@@ -21,5 +21,11 @@ $t=static fn($s,$p=[])=>Yii::t('GithubModuleManagerModule.base',$s,$p);
 <?php foreach (['maxDownloadMb'=>['Maximum download (MB)',50,200],'maxUnpackedMb'=>['Maximum unpacked size (MB)',200,1000],'maxFiles'=>['Maximum archive entries',10000,50000],'backupRetention'=>['Backups to keep',3,20]] as $key=>$setting): ?>
 <div class="form-group"><?= Html::label(Html::encode($t($setting[0])),$key) ?><?= Html::input('number',$key,$this->context->module->settings->get($key,$setting[1]),['id'=>$key,'class'=>'form-control','min'=>1,'max'=>$setting[2],'required'=>true]) ?></div>
 <?php endforeach ?>
+<?php $self=null; foreach ($repositories as $repository) if ($repository->module_id === 'github-module-manager') { $self=$repository; break; } ?>
+<hr><h3><?= Html::encode($t('Manager self-update')) ?></h3>
+<p><?= Html::encode($t('Optionally configure the repository used to update this manager. Leave both fields empty to disable self-updates.')) ?></p>
+<div class="form-group"><?= Html::label(Html::encode($t('GitHub repository URL')),'self-repository-url') ?><?= Html::input('url','selfRepositoryUrl',$self->repository_url ?? '',['id'=>'self-repository-url','class'=>'form-control','placeholder'=>'https://github.com/owner/repository']) ?></div>
+<div class="form-group"><?= Html::label(Html::encode($t('Branch')),'self-branch') ?><?= Html::input('text','selfBranch',$self->channel_value ?? '',['id'=>'self-branch','class'=>'form-control','placeholder'=>'main']) ?></div>
+<p class="help-block"><?= Html::encode($t('Self-updates use the same review, commit pinning, backup and recovery flow as other modules.')) ?></p>
 <?= Html::submitButton(Html::encode($t('Save settings')),['class'=>'btn btn-primary']) ?><?= Html::endForm() ?></details>
 </div></div>

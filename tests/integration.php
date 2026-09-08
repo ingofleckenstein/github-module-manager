@@ -16,7 +16,7 @@ $admin=humhub\modules\user\models\User::findOne(['username'=>'admin']);
 if (!$admin || !$admin->isSystemAdmin()) throw new RuntimeException('Local test admin required');
 $app->user->setIdentity($admin);
 $app->set('assetManager',['class'=>humhub\components\AssetManager::class,'basePath'=>$protected.'/../assets','baseUrl'=>'/assets']);
-use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInterface,Files,Failure,Paths};
+use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInterface,Files,Failure,Paths,ModuleValidator};
 use humhub\modules\githubmodulemanager\models\{Repository,UpdateLog};
 class FixtureProvider implements RepositoryProviderInterface
 {
@@ -57,6 +57,9 @@ $target=(new Paths())->target('gmm-fixture');
 if (file_exists($target) || Repository::findOne(['module_id'=>'gmm-fixture'])) throw new RuntimeException('Remove previous gmm-fixture test artifacts before running');
 $runtime=(new Paths())->runtime();
 try {
+    $managerTarget=(new Paths())->managerTarget();
+    ensure($managerTarget===realpath($app->getModule('github-module-manager')->getBasePath()),'Manager target is the loaded module path');
+    ensure((new ModuleValidator())->inspect($managerTarget,true)['id']==='github-module-manager','Manager metadata is accepted only in self-update mode');
     $p=$workflow->inspect($url,'main'); ensure(!file_exists($target),'Inspection must not install files');
     $r=$workflow->install($p['token'],false);
     ensure($app->moduleManager->hasModule('gmm-fixture'),'HumHub discovers installed module');

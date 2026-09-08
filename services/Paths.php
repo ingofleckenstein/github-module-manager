@@ -24,9 +24,26 @@ class Paths
         }
         return array_values(array_unique($roots));
     }
-    public function target(string $id, ?string $expected = null): string
+    public function managerTarget(): string
     {
-        ModuleValidator::id($id);
+        $module = Yii::$app->getModule('github-module-manager');
+        $path = $module ? $module->getBasePath() : null;
+        if (!is_string($path) || !is_dir($path)) throw new Failure('GitHub Module Manager path could not be determined.');
+        $path = realpath($path);
+        if ($path === false) throw new Failure('GitHub Module Manager path could not be determined.');
+        Files::noLinks($path);
+        $this->assertWritableAtomicTarget($path);
+        return $path;
+    }
+    public function target(string $id, ?string $expected = null, bool $allowManager = false): string
+    {
+        ModuleValidator::id($id, $allowManager);
+        if ($id === 'github-module-manager') {
+            if (!$allowManager) throw new Failure('Invalid or protected module ID.');
+            $target = $this->managerTarget();
+            if ($expected !== null && $target !== $expected) throw new Failure('Module path changed. Inspect the repository again.');
+            return $target;
+        }
         $core = Yii::getAlias('@humhub/modules') . '/' . $id;
         if (file_exists($core) || is_link($core)) throw new Failure('Core modules cannot be overwritten.');
         $candidates = [];
@@ -46,8 +63,12 @@ class Paths
         }
         Files::noLinks($target);
         if ($expected !== null && $target !== $expected) throw new Failure('Module path changed. Inspect the repository again.');
+        $this->assertWritableAtomicTarget($target);
+        return $target;
+    }
+    private function assertWritableAtomicTarget(string $target): void
+    {
         if (!is_writable(dirname($target))) throw new Failure('Custom module directory is not writable.');
         if (stat(dirname($target))['dev'] !== stat($this->runtime())['dev']) throw new Failure('Runtime and custom modules must be on the same filesystem for atomic updates.');
-        return $target;
     }
 }

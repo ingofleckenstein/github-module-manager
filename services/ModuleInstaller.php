@@ -10,7 +10,7 @@ class ModuleInstaller
     {
         if (!rename($from, $to)) throw new Failure('Module directory could not be exchanged.');
     }
-    public function install(string $id, string $staged, string $target, ?string $expectedHash, callable $afterSwap, ?callable $beforeSwap = null): array
+    public function install(string $id, string $staged, string $target, ?string $expectedHash, callable $afterSwap, ?callable $beforeSwap = null, bool $selfUpdate = false): array
     {
         $lock = new Lock($this->runtime, $id);
         Files::noLinks($staged); Files::noLinks($target);
@@ -24,7 +24,7 @@ class ModuleInstaller
         $backupRoot = $this->runtime . '/backups/' . $id;
         Files::directory($backupRoot);
         $backup = $backupRoot . '/' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(6));
-        $state = ['module'=>$id,'target'=>$target,'backup'=>$exists ? $backup : null,'staged'=>$staged,'phase'=>'prepared','databaseRollback'=>false];
+        $state = ['module'=>$id,'target'=>$target,'backup'=>$exists ? $backup : null,'staged'=>$staged,'phase'=>'prepared','databaseRollback'=>false,'selfUpdate'=>$selfUpdate];
         Files::writeJson($journal, $state);
         $oldMoved = false; $newMoved = false;
         try {

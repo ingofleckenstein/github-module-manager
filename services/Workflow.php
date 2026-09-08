@@ -7,12 +7,44 @@ use Yii;
 
 class Workflow
 {
+    public const MANAGER_ID = 'github-module-manager';
     public function __construct(private ?RepositoryProviderInterface $provider = null, private ?Paths $paths = null, private ?HumHubBridge $bridge = null)
     {
         $this->paths ??= new Paths(); $this->bridge ??= new HumHubBridge();
         $this->provider ??= new GitHubClient($this->limit('maxDownloadMb', 50) * 1048576);
     }
     private function limit(string $key, int $default): int { return max(1, (int)Yii::$app->getModule('github-module-manager')->settings->get($key, $default)); }
+    private function isSelf(Repository $repository): bool { return $repository->module_id === self::MANAGER_ID; }
+    /** Configure the one protected mapping used for the manager's own updates. */
+    public function configureSelf(string $url, string $branch): ?Repository
+    {
+        $url = trim($url); $branch = trim($branch);
+        $existing = Repository::findOne(['module_id'=>self::MANAGER_ID]);
+        $runtime = $this->paths->runtime();
+        $lock = new Lock($runtime, self::MANAGER_ID);
+        if (file_exists($runtime . '/operations/' . self::MANAGER_ID . '.json')) throw new Failure('A previous operation needs manual recovery. See the operation journal.');
+        if ($url === '' && $branch === '') {
+            if ($existing && !$existing->delete()) throw new Failure('Repository mapping could not be removed.');
+            return null;
+        }
+        if ($url === '' || $branch === '') throw new Failure('Enter both a GitHub repository URL and branch for the manager self-update.');
+        $source = RepositoryUrl::parse($url); RepositoryUrl::branch($branch);
+        $target = $this->paths->managerTarget();
+        $local = (new ModuleValidator())->inspect($target, true);
+        if ($existing && $existing->module_path !== $target) throw new Failure('Module path changed. Inspect the repository again.');
+        $sourceChanged = $existing && ($existing->repository_url !== $source['url'] || $existing->channel_value !== $branch);
+        $r = $existing ?? new Repository();
+        $r->module_id = self::MANAGER_ID; $r->provider = 'github'; $r->repository_url = $source['url'];
+        $r->repository_owner = $source['owner']; $r->repository_name = $source['name']; $r->channel_type = 'branch'; $r->channel_value = $branch;
+        if (!$existing) {
+            $r->module_path = $target; $r->installed_version = $local['version']; $r->file_hash = Files::hash($target); $r->status = 'unknown';
+        } elseif ($sourceChanged) {
+            // A new source must not inherit a verified SHA or remote state.
+            $r->installed_commit_sha = null; $r->last_remote_version = null; $r->last_remote_commit_sha = null; $r->last_checked_at = null; $r->status = 'unknown';
+        }
+        if (!$r->save()) throw new Failure('Repository mapping could not be saved.');
+        return $r;
+    }
     public function discover(string $url): array
     {
         $source = RepositoryUrl::parse($url);
@@ -31,18 +63,20 @@ class Workflow
             $this->provider->download($source, $sha, $dir . '/source.zip');
             $module = (new ArchiveValidator($this->limit('maxDownloadMb',50)*1048576, $this->limit('maxUnpackedMb',200)*1048576, $this->limit('maxFiles',10000)))->extract($dir . '/source.zip', $dir . '/unpacked');
             unlink($dir . '/source.zip');
-            $validator = new ModuleValidator(); $info = $validator->inspect($module);
+            $selfUpdate = $existing !== null && $this->isSelf($existing);
+            if ($selfUpdate && $existing->module_path !== $this->paths->managerTarget()) throw new Failure('Module path changed. Inspect the repository again.');
+            $validator = new ModuleValidator(); $info = $validator->inspect($module, $selfUpdate);
             $warnings = $validator->compatibility($info, $module, Yii::$app->version);
             if ($existing && $existing->module_id !== $info['id']) throw new Failure('Repository module ID does not match the local module.');
-            $target = $this->paths->target($info['id'], $existing ? $existing->module_path : null);
-            $local = is_dir($target) ? $validator->inspect($target) : null;
+            $target = $this->paths->target($info['id'], $existing ? $existing->module_path : null, $selfUpdate);
+            $local = is_dir($target) ? $validator->inspect($target, $selfUpdate) : null;
             $localHash = $local ? Files::hash($target) : null;
             if (!$existing && Repository::findOne(['module_id'=>$info['id']])) throw new Failure('This module already has a repository mapping.');
             $preview = ['token'=>$token,'admin'=>(int)Yii::$app->user->id,'expires'=>time()+1800,'source'=>$source,
                 'branch'=>$branch,'defaultBranch'=>$remote['default_branch'],'sha'=>$sha,'info'=>$info,'warnings'=>$warnings,
                 'module'=>$module,'hash'=>Files::hash($module),'target'=>$target,'local'=>$local,'localHash'=>$localHash,
                 'repositoryId'=>$existing ? $existing->id : null,
-                'mappingHash'=>$existing ? hash('sha256',json_encode($existing->attributes)) : null,
+                'mappingHash'=>$existing ? hash('sha256',json_encode($existing->attributes)) : null,'selfUpdate'=>$selfUpdate,
                 'localChanges'=>$existing && $existing->file_hash && $localHash !== $existing->file_hash];
             Files::writeJson($dir . '/preview.json', $preview);
             return $preview;
@@ -75,6 +109,7 @@ class Workflow
     public function attach(string $token): Repository
     {
         $p=$this->preview($token); $lock=new Lock($this->paths->runtime(),$p['info']['id']);
+        if (!empty($p['selfUpdate'])) throw new Failure('Manager self-updates cannot use a mapping-only operation.');
         if (file_exists($this->paths->runtime().'/operations/'.$p['info']['id'].'.json')) throw new Failure('A previous operation needs manual recovery. See the operation journal.');
         $r=$this->record($p);
         $target=$this->paths->target($p['info']['id'],$p['target']);
@@ -95,7 +130,9 @@ class Workflow
         $r=$this->record($p);
         if ($p['local'] && !$p['repositoryId']) throw new Failure('Map the existing module before updating it.');
         if ($p['localChanges'] && !$acknowledgeLocalChanges) throw new Failure('Confirm that local changes may be replaced.');
-        $this->paths->target($p['info']['id'],$p['target']);
+        $selfUpdate = !empty($p['selfUpdate']) && $p['info']['id'] === self::MANAGER_ID && $this->isSelf($r);
+        if (!empty($p['selfUpdate']) && !$selfUpdate) throw new Failure('Manager self-update configuration changed. Inspect the repository again.');
+        $this->paths->target($p['info']['id'],$p['target'],$selfUpdate);
         $dir=dirname($p['module'],2); $id=$p['info']['id']; $config=[];
         $this->log($p,'start','installing');
         try {
@@ -108,7 +145,7 @@ class Workflow
                 $tx=Yii::$app->db->beginTransaction();
                 try { if (!$r->save()) throw new Failure('Repository mapping could not be saved.'); $this->log($p,'complete','success'); $tx->commit(); }
                 catch (\Throwable $e) { $tx->rollBack(); throw $e; }
-            },function() use ($p,&$config) { $this->record($p); $config=$this->bridge->requirements($p['module'],$p['info']['id']); });
+            },function() use ($p,&$config) { $this->record($p); $config=$this->bridge->requirements($p['module'],$p['info']['id']); }, $selfUpdate);
             foreach ($warnings as $warning) $this->log($p,'cleanup','warning',$warning);
             return $r;
         } catch (\Throwable $e) {

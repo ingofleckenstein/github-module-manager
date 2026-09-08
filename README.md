@@ -2,7 +2,7 @@
 
 Dieses **HumHub-Modul** ermöglicht Systemadministrator*innen, Module aus **öffentlichen GitHub-Repositories** zu prüfen, zu installieren und anhand neuer Branch-Commits zu aktualisieren. Es wird in HumHub installiert und ist kein PeerTube-Plugin.
 
-Version **0.1.1 / MVP**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+Version **0.1.2**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
 
 ## Funktionsumfang
 
@@ -16,6 +16,7 @@ Version **0.1.1 / MVP**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP
 - Lokale Dateiänderungen per SHA-256-Fingerabdruck erkennen und vor dem Ersetzen ausdrücklich bestätigen lassen.
 - Systemadmin-Prüfung, POST/CSRF-Schutz, begrenzte HTTPS-Downloads und sichere ZIP-Extraktion.
 - Deutsche und englische Oberfläche; konfigurierbare Download-, Entpack-, Dateianzahl- und Backup-Limits.
+- Optionaler Selbstupdate-Kanal: Das Manager-Repository und sein Branch werden unter den Einstellungen hinterlegt. Der anschließende Updateablauf nutzt dieselbe SHA-gebundene Vorschau, Sperre, das Staging, Verzeichnistausch, Backup und Wiederherstellungsprotokoll wie ein Modulupdate. Die neue Manager-Version wird erst mit dem nächsten Request geladen.
 
 Neu installierte Module bleiben deaktiviert. Aktivierung erfolgt über HumHubs normale Modulverwaltung. Der Aktivierungszustand bestehender Module wird nicht verändert. Auch deaktivierte Module können aktualisiert und migriert werden.
 
@@ -26,11 +27,11 @@ Neu installierte Module bleiben deaktiviert. Aktivierung erfolgt über HumHubs n
 3. **Administration → GitHub-Modulmanager** öffnen und ein öffentliches Repository hinzufügen.
 4. Branch auswählen, Modul prüfen, angezeigte Metadaten kontrollieren und erst danach installieren. Bei vorhandenen Dateien zunächst die Repository-Zuordnung speichern und anschließend ein Update prüfen.
 
-Der Webserver-/PHP-Benutzer benötigt Schreibrechte auf Runtime und dem gewählten Custom-Modulpfad. Beide müssen auf demselben Dateisystem liegen, damit der Austausch ohne dateiweises Überschreiben gelingt. Der Manager leitet die Pfade aus `moduleAutoloadPaths` ab. Core-Pfade, reservierte Anwendungsaliase, Symlink-Pfade und Updates des Managers selbst werden abgewiesen.
+Der Webserver-/PHP-Benutzer benötigt Schreibrechte auf Runtime und dem gewählten Custom-Modulpfad. Beide müssen auf demselben Dateisystem liegen, damit der Austausch ohne dateiweises Überschreiben gelingt. Der Manager leitet die Pfade aus `moduleAutoloadPaths` ab. Core-Pfade, reservierte Anwendungsaliase und Symlink-Pfade werden abgewiesen. Der Manager selbst ist nur über seinen besonderen, in den Einstellungen hinterlegten Selbstupdate-Kanal aktualisierbar; freie Zuordnung oder Überschreibung über die normale Modulmaske bleibt gesperrt.
 
 ## Grenzen des MVP
 
-- Nur öffentliche GitHub-Repositories und Branches. **Private Repositories funktionieren nicht**, auch dann nicht, wenn du im Browser bei GitHub angemeldet bist. Es gibt keine Token-Einstellung.
+- Nur öffentliche GitHub-Repositories und Branches. **Private Repositories funktionieren nicht**, auch dann nicht, wenn du im Browser bei GitHub angemeldet bist. Die bestehende Installation besitzt keine GitHub-Token- oder andere Repository-Authentifizierung; deshalb kann auch der Selbstupdate-Kanal keine privaten Repositories lesen.
 - Releases, Tags, SemVer-Updatekanäle, automatische Prüfungen und zusätzliche Provider sind gemäß Arbeitsauftrag Phase 2. Es erfolgen keine unbeaufsichtigten Updates.
 - Nur ein Modul im Repository-Wurzelverzeichnis unter dem GitHub-ZIP-Wrapper. Monorepos mit Modul-Unterordnern werden abgewiesen.
 - `config.php` muss eine eindeutig statisch lesbare Modul-ID und einen Klasseneintrag enthalten. Dynamisch berechnete oder mehrdeutige IDs werden abgewiesen.
@@ -44,7 +45,7 @@ Ein HumHub-Modul enthält ausführbaren PHP-Code. Installiere ausschließlich ve
 
 Die öffentliche GitHub-API benötigt keinen Token und begrenzt anonyme Anfragen. Repository-Metadaten werden 15 Minuten gecacht; explizite Update-Prüfungen lesen neu. Ein normaler Aufruf der Übersicht startet keine GitHub-Abfragen. HTTP-Redirects werden nicht verfolgt; API- und Codeload-Adressen werden direkt konstruiert und auf erlaubte Hosts sowie öffentliche IPv4-Adressen begrenzt.
 
-Backups und Vorgangsprotokolle liegen unter `@runtime/github-module-manager`. Standardlimits: Download 50 MB, entpackt 200 MB, 10.000 Einträge, drei Dateibackups. Vorschauen gelten 30 Minuten; abgebrochene Vorschauen werden beim nächsten Prüfvorgang nach zwei Stunden aufgeräumt. Backups werden nach erfolgreichen Updates begrenzt. Ein gemeinsam genutztes Runtime-Dateisystem ist bei mehreren HumHub-Webservern Voraussetzung für die Dateisperren.
+Backups und Vorgangsprotokolle liegen unter `@runtime/github-module-manager`. Standardlimits: Download 50 MB, entpackt 200 MB, 10.000 Einträge, drei Dateibackups. Vorschauen gelten 30 Minuten; abgebrochene Vorschauen werden beim nächsten Prüfvorgang nach zwei Stunden aufgeräumt. Backups werden nach erfolgreichen Updates begrenzt. Ein gemeinsam genutztes Runtime-Dateisystem ist bei mehreren HumHub-Webservern Voraussetzung für die Dateisperren. Selbstupdates sind ebenfalls mit `selfUpdate: true` im Vorgangsprotokoll markiert. Vor einem Selbstupdate ist ein Wartungsfenster sinnvoll: Der gerade verarbeitete Request läuft noch mit dem alten PHP-Code, die Dateiübernahme erfolgt atomar und die neue Version wird im folgenden Request verwendet.
 
 **Ein Datei-Rollback ist kein Datenbank-Rollback.** Vor Updates eine Datenbanksicherung erstellen. Bei einer fehlgeschlagenen oder abgebrochenen Operation weitere Änderungen stoppen und [RECOVERY.md](docs/RECOVERY.md) verwenden. Ein persistierendes Vorgangsprotokoll blockiert weitere Installationen dieses Moduls. Deaktivieren des Managers erhält Zuordnungen und Historie.
 

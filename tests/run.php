@@ -12,7 +12,7 @@ function check($ok,$message) { global $count; if (!$ok) throw new RuntimeExcepti
 function reject(callable $f,$message) { try { $f(); } catch (Throwable $e) { check(true,$message); return; } check(false,$message); }
 $tmp=sys_get_temp_dir().'/github-manager-tests-'.bin2hex(random_bytes(5)); Files::directory($tmp);
 function zipFixture($path,array $files): void { $z=new ZipArchive(); $z->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE); foreach($files as $name=>$body) $z->addFromString($name,$body); $z->close(); }
-function moduleFiles($version='1.0.0'): array { return ['wrapper/module.json'=>json_encode(['id'=>'example-module','name'=>'Example','version'=>$version,'humhub'=>['minVersion'=>'1.18.0','maxVersion'=>'1.18.*']]),'wrapper/Module.php'=>'<?php namespace Example; class Module {}','wrapper/config.php'=>"<?php return ['id'=>'example-module','class'=>'Example\\\\Module'];"]; }
+function moduleFiles($version='1.0.0', $id='example-module'): array { return ['wrapper/module.json'=>json_encode(['id'=>$id,'name'=>'Example','version'=>$version,'humhub'=>['minVersion'=>'1.18.0','maxVersion'=>'1.18.*']]),'wrapper/Module.php'=>'<?php namespace Example; class Module {}','wrapper/config.php'=>"<?php return ['id'=>'$id','class'=>'Example\\\\Module'];"]; }
 try {
     foreach(['https://github.com/owner/repo','https://github.com/owner/repo.git','https://github.com/owner/repo/'] as $url) check(RepositoryUrl::parse($url)['name']==='repo','Valid URL');
     foreach(['http://github.com/a/b','https://github.com.evil/a/b','https://github.com/a/b?x=y','https://github.com/a/b#x','https://user@github.com/a/b','https://github.com/a/../b','file:///tmp/a','https://127.0.0.1/a/b','git@github.com:a/b','https://github.com/a/%2e%2e','https://github.com/a/..'] as $url) reject(fn()=>RepositoryUrl::parse($url),'Bad URL');
@@ -57,6 +57,9 @@ try {
     $lock=new Lock($runtime,'example-module'); reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null),'Concurrent update blocked'); unset($lock);
     $before=Files::hash($target); reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null,fn()=>throw new Failure('requirements')),'Requirements failure'); check(Files::hash($target)===$before,'Requirements do not exchange files');
     foreach (['app','runtime','web','humhub','github-module-manager'] as $id) reject(fn()=>ModuleValidator::id($id),'Reserved module ID');
+    zipFixture($tmp.'/manager.zip',moduleFiles('1.0.0','github-module-manager')); $manager=$validator->extract($tmp.'/manager.zip',$tmp.'/manager');
+    reject(fn()=>(new ModuleValidator())->inspect($manager),'Manager remains protected for ordinary imports');
+    check((new ModuleValidator())->inspect($manager,true)['id']==='github-module-manager','Manager requires explicit self-update mode');
     $faultyBackup=new class($runtime) extends ModuleInstaller { protected function move(string $from,string $to): void { if (str_contains($to,'/backups/')) throw new Failure('backup failed'); parent::move($from,$to); } };
     reject(fn()=>$faultyBackup->install('example-module',$stage,$target,$hash,fn()=>null),'Backup failure'); check(Files::hash($target)===$hash,'Backup failure keeps active files');
     chmod(dirname($target),0555);
