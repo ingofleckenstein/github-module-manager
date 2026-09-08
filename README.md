@@ -2,7 +2,7 @@
 
 Dieses **HumHub-Modul** ermöglicht Systemadministrator*innen, Module aus **öffentlichen GitHub-Repositories** zu prüfen, zu installieren und anhand neuer Branch-Commits zu aktualisieren. Es wird in HumHub installiert und ist kein PeerTube-Plugin.
 
-Version **0.1.2**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+Version **0.1.3**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
 
 ## Funktionsumfang
 
@@ -13,6 +13,7 @@ Version **0.1.2**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2
 - Manuelle Einzel- und Gesamtprüfung, Status, Details und Updatehistorie mit Admin-ID.
 - Datei-Backup, vollständiges Staging, Verzeichnistausch auf demselben Dateisystem und Wiederherstellung bei abgefangenen Fehlern.
 - Migrationen über HumHubs `MigrationService`, Bereinigung von Modul-, Anwendungs- und Asset-Cache sowie OPCache. Ausstehende HumHub-Core-Migrationen blockieren einen Modulupdate vor dem Dateiaustausch mit einem erklärenden Hinweis.
+- Bereits beim Start registrierte Module werden bei einem Update nicht ein zweites Mal im selben Request registriert. Dadurch bleiben zwischengespeicherte Modulkonfigurationen und Event-Handler beim Dateiaustausch stabil; der bereinigte Cache wird im folgenden Request neu geladen.
 - Lokale Dateiänderungen per SHA-256-Fingerabdruck erkennen und vor dem Ersetzen ausdrücklich bestätigen lassen.
 - Systemadmin-Prüfung, POST/CSRF-Schutz, begrenzte HTTPS-Downloads und sichere ZIP-Extraktion.
 - Deutsche und englische Oberfläche; konfigurierbare Download-, Entpack-, Dateianzahl- und Backup-Limits.

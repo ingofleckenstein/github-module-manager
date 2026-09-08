@@ -50,9 +50,28 @@ class HumHubBridge
     }
     public function migrate(string $id, string $path, array $config): void
     {
-        Yii::$app->moduleManager->register($path, $config);
+        if (($config['id'] ?? null) !== $id || empty($config['class'])) {
+            throw new Failure('Module ID and config.php do not match.');
+        }
+
+        /*
+         * An existing module was already registered when this request
+         * bootstrapped. Registering its replacement config again adds event
+         * callbacks to the same request a second time. This is unsafe for
+         * namespace changes because Yii's autoloader includes class files
+         * directly. A newly installed module still needs registration so it
+         * becomes discoverable immediately after its initial migration.
+         */
+        $alreadyRegistered = Yii::$app->moduleManager->hasModule($id);
+        if (!empty($config['namespace']) && is_string($config['namespace'])) {
+            Yii::setAlias('@' . str_replace('\\', '/', $config['namespace']), $path);
+        }
         Yii::setAlias('@' . $id, $path);
-        // Existing Module classes may already be loaded in this PHP request.
+
+        if (!$alreadyRegistered) {
+            Yii::$app->moduleManager->register($path, $config);
+        }
+
         // MigrationService resolves fresh migration files via the module alias.
         $module = new Module($id, Yii::$app, ['basePath'=>$path]);
         $service = new MigrationService($module);
