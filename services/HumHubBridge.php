@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 namespace humhub\modules\githubmodulemanager\services;
 use humhub\components\Module;
-use humhub\services\MigrationService;
+use humhub\commands\MigrateController;
 use Yii;
+use yii\console\ExitCode;
 use yii\db\Query;
 
 class HumHubBridge
@@ -72,10 +73,34 @@ class HumHubBridge
             Yii::$app->moduleManager->register($path, $config);
         }
 
-        // MigrationService resolves fresh migration files via the module alias.
-        $module = new Module($id, Yii::$app, ['basePath'=>$path]);
-        $service = new MigrationService($module);
-        if ($service->hasMigrations() && $service->migrateUp() !== true) throw new Failure('Module migrations failed.');
+        // Run only the staged target module's migration directory. HumHub's
+        // MigrationService enables MigrateController's scan of registered
+        // modules, which can re-run a pending core or unrelated module
+        // migration during an otherwise isolated module update.
+        $migrationPath = '@' . $id . '/migrations';
+        if (!is_dir(Yii::getAlias($migrationPath))) {
+            return;
+        }
+        $module = new Module($id, Yii::$app, ['basePath' => $path]);
+        $controller = new MigrateController('migrate', $module, [
+            'db' => Yii::$app->db,
+            'interactive' => false,
+            'color' => false,
+            'migrationPath' => $migrationPath,
+            'includeModuleMigrations' => false,
+        ]);
+        // MigrateController writes console-style status and failure output even
+        // in a web application. Keep that out of the HTTP response so a failed
+        // migration is returned through the manager's normal flash error path.
+        ob_start();
+        try {
+            $result = $controller->runAction('up');
+        } finally {
+            ob_end_clean();
+        }
+        if ($result !== ExitCode::OK) {
+            throw new Failure('Module migrations failed.');
+        }
     }
     public function clear(): void
     {

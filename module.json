@@ -2,7 +2,7 @@
   "id": "github-module-manager",
   "name": "GitHub Module Manager",
   "description": "Install and update trusted HumHub modules from public GitHub branches.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "humhub": {"minVersion": "1.18.5", "maxVersion": "1.18.*"},
   "licence": "AGPL-3.0-only"
 }
