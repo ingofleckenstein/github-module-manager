@@ -51,8 +51,16 @@ class AdminController extends \humhub\modules\admin\components\Controller
     public function actionInspect()
     {
         try {
-            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null; $this->assertNotSelfRepository($repository);
-            $p=(new Workflow())->inspect((string)Yii::$app->request->post('url'),(string)Yii::$app->request->post('branch'),$repository,true);
+            $repository=Yii::$app->request->post('id') ? $this->repository(Yii::$app->request->post('id')) : null;
+            if ($repository && $repository->module_id === Workflow::MANAGER_ID) {
+                // The self-update source is configured only in settings. Do not
+                // trust hidden form values when inspecting its next update.
+                $url=$repository->repository_url; $branch=$repository->channel_value;
+            } else {
+                $this->assertNotSelfRepository($repository);
+                $url=(string)Yii::$app->request->post('url'); $branch=(string)Yii::$app->request->post('branch');
+            }
+            $p=(new Workflow())->inspect($url,$branch,$repository,true);
             return $this->redirect(['confirm','token'=>$p['token']]);
         } catch (\Throwable $e) { return $this->error($e,['index']); }
     }
