@@ -6,10 +6,10 @@ class Files
 {
     public static function isWithinDirectories(string $path, array $directories): bool
     {
-        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        $path = self::normalizePath($path);
         foreach ($directories as $directory) {
             if (!is_string($directory) || $directory === '') continue;
-            $directory = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $directory);
+            $directory = self::normalizePath($directory);
             $directory = rtrim($directory, '/\\');
             if ($directory === '') {
                 if (str_starts_with($path, DIRECTORY_SEPARATOR)) return true;
@@ -18,6 +18,22 @@ class Files
             if ($path === $directory || str_starts_with($path, $directory . DIRECTORY_SEPARATOR)) return true;
         }
         return false;
+    }
+    private static function normalizePath(string $path): string
+    {
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        $absolute = str_starts_with($path, DIRECTORY_SEPARATOR);
+        $parts = [];
+        foreach (explode(DIRECTORY_SEPARATOR, $path) as $part) {
+            if ($part === '' || $part === '.') continue;
+            if ($part === '..') {
+                if ($parts && end($parts) !== '..') array_pop($parts);
+                elseif (!$absolute) $parts[] = $part;
+                continue;
+            }
+            $parts[] = $part;
+        }
+        return ($absolute ? DIRECTORY_SEPARATOR : '') . implode(DIRECTORY_SEPARATOR, $parts);
     }
     public static function directory(string $path): void
     {

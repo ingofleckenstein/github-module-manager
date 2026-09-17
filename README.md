@@ -2,7 +2,7 @@
 
 Dieses **HumHub-Modul** ermöglicht Systemadministrator*innen, Module aus **öffentlichen GitHub-Repositories** zu prüfen, zu installieren und anhand neuer Branch-Commits zu aktualisieren. Es wird in HumHub installiert und ist kein PeerTube-Plugin.
 
-Version **0.1.7**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+Version **0.1.8**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
 
 ## Funktionsumfang
 

@@ -17,6 +17,7 @@ try {
     check(Files::isWithinDirectories('/var/www/vhosts/sexpositiv.events/testcommunity', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir accepts nested directory');
     check(!Files::isWithinDirectories('/var/www/vhosts', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir rejects parent directory');
     check(!Files::isWithinDirectories('/var/www/vhosts/sexpositiv.events-other', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir respects directory boundary');
+    check(!Files::isWithinDirectories('/var/www/vhosts/sexpositiv.events/testcommunity/protected/modules/../../../../', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir resolves parent directory segments');
     foreach(['https://github.com/owner/repo','https://github.com/owner/repo.git','https://github.com/owner/repo/'] as $url) check(RepositoryUrl::parse($url)['name']==='repo','Valid URL');
     foreach(['http://github.com/a/b','https://github.com.evil/a/b','https://github.com/a/b?x=y','https://github.com/a/b#x','https://user@github.com/a/b','https://github.com/a/../b','file:///tmp/a','https://127.0.0.1/a/b','git@github.com:a/b','https://github.com/a/%2e%2e','https://github.com/a/..'] as $url) reject(fn()=>RepositoryUrl::parse($url),'Bad URL');
     foreach(['main','feature/private-follower-sharing'] as $branch) check(RepositoryUrl::branch($branch)===$branch,'Valid branch');
