@@ -50,10 +50,30 @@ class Files
     }
     public static function noLinks(string $path): void
     {
-        $cursor = $path;
-        while ($cursor !== dirname($cursor)) {
-            if (is_link($cursor)) throw new Failure('Symbolic links are not supported.');
-            $cursor = dirname($cursor);
+        $cursor = self::normalizePath($path);
+
+        $openBaseDir = (string)ini_get('open_basedir');
+        $allowedDirectories = $openBaseDir === ''
+            ? null
+            : array_filter(explode(PATH_SEPARATOR, $openBaseDir), 'strlen');
+
+        while (true) {
+            // Never inspect a parent outside PHP's open_basedir.
+            if ($allowedDirectories !== null
+                && !self::isWithinDirectories($cursor, $allowedDirectories)) {
+                break;
+            }
+
+            if (is_link($cursor)) {
+                throw new Failure('Symbolic links are not supported.');
+            }
+
+            $parent = dirname($cursor);
+            if ($parent === $cursor) {
+                break;
+            }
+
+            $cursor = $parent;
         }
     }
     public static function hash(string $path): string
