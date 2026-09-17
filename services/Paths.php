@@ -16,8 +16,15 @@ class Paths
     {
         $core = realpath(Yii::getAlias('@humhub/modules'));
         $roots = [];
+        $openBaseDir = (string)ini_get('open_basedir');
+        $allowedDirectories = $openBaseDir === '' ? null : explode(PATH_SEPARATOR, $openBaseDir);
         foreach (Yii::$app->params['moduleAutoloadPaths'] ?? [] as $alias) {
-            $path = Yii::getAlias($alias); Files::noLinks($path);
+            $path = Yii::getAlias($alias);
+            // Plesk may expose a broader configured autoload path than this
+            // virtual host is allowed to inspect. Skip it before filesystem
+            // checks; allowed paths still undergo the strict no-symlink check.
+            if ($allowedDirectories !== null && !Files::isWithinDirectories($path, $allowedDirectories)) continue;
+            Files::noLinks($path);
             $real = realpath($path);
             if ($real === false || $real === $core || ($core && str_starts_with($real, $core . DIRECTORY_SEPARATOR))) continue;
             $roots[] = $real;

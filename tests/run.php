@@ -14,6 +14,9 @@ $tmp=sys_get_temp_dir().'/github-manager-tests-'.bin2hex(random_bytes(5)); Files
 function zipFixture($path,array $files): void { $z=new ZipArchive(); $z->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE); foreach($files as $name=>$body) $z->addFromString($name,$body); $z->close(); }
 function moduleFiles($version='1.0.0', $id='example-module'): array { return ['wrapper/module.json'=>json_encode(['id'=>$id,'name'=>'Example','version'=>$version,'humhub'=>['minVersion'=>'1.18.0','maxVersion'=>'1.18.*']]),'wrapper/Module.php'=>'<?php namespace Example; class Module {}','wrapper/config.php'=>"<?php return ['id'=>'$id','class'=>'Example\\\\Module'];"]; }
 try {
+    check(Files::isWithinDirectories('/var/www/vhosts/sexpositiv.events/testcommunity', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir accepts nested directory');
+    check(!Files::isWithinDirectories('/var/www/vhosts', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir rejects parent directory');
+    check(!Files::isWithinDirectories('/var/www/vhosts/sexpositiv.events-other', ['/var/www/vhosts/sexpositiv.events/', '/tmp']), 'Open basedir respects directory boundary');
     foreach(['https://github.com/owner/repo','https://github.com/owner/repo.git','https://github.com/owner/repo/'] as $url) check(RepositoryUrl::parse($url)['name']==='repo','Valid URL');
     foreach(['http://github.com/a/b','https://github.com.evil/a/b','https://github.com/a/b?x=y','https://github.com/a/b#x','https://user@github.com/a/b','https://github.com/a/../b','file:///tmp/a','https://127.0.0.1/a/b','git@github.com:a/b','https://github.com/a/%2e%2e','https://github.com/a/..'] as $url) reject(fn()=>RepositoryUrl::parse($url),'Bad URL');
     foreach(['main','feature/private-follower-sharing'] as $branch) check(RepositoryUrl::branch($branch)===$branch,'Valid branch');

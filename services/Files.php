@@ -4,6 +4,21 @@ namespace humhub\modules\githubmodulemanager\services;
 
 class Files
 {
+    public static function isWithinDirectories(string $path, array $directories): bool
+    {
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        foreach ($directories as $directory) {
+            if (!is_string($directory) || $directory === '') continue;
+            $directory = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $directory);
+            $directory = rtrim($directory, '/\\');
+            if ($directory === '') {
+                if (str_starts_with($path, DIRECTORY_SEPARATOR)) return true;
+                continue;
+            }
+            if ($path === $directory || str_starts_with($path, $directory . DIRECTORY_SEPARATOR)) return true;
+        }
+        return false;
+    }
     public static function directory(string $path): void
     {
         if (is_link($path) || (!is_dir($path) && !mkdir($path, 0700, true))) throw new Failure('Directory cannot be created.');
