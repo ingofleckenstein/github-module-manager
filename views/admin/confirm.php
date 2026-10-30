@@ -3,6 +3,7 @@
 use yii\helpers\Html;
 $t=static fn($s)=>Yii::t('GithubModuleManagerModule.base',$s);
 ?>
+<?= $this->render('_messages') ?>
 <div class="panel panel-default"><div class="panel-heading"><?= Html::encode($t('Review module')) ?></div><div class="panel-body">
 <dl><?php foreach (['Repository'=>$p['source']['url'],'Owner'=>$p['source']['owner'],'Default branch'=>$p['defaultBranch'],'Module'=>$p['info']['name'],'Module ID'=>$p['info']['id'],'Description'=>$p['info']['description']??'','Installed'=>$p['local']['version']??$t('Not installed'),'Remote'=>$p['info']['version'],'Branch'=>$p['branch'],'Commit'=>$p['sha']] as $label=>$value): ?>
 <dt><?= Html::encode($t($label)) ?></dt><dd><?= Html::encode(is_scalar($value) ? $value : '') ?></dd><?php endforeach ?></dl>

@@ -32,7 +32,11 @@ class ModuleInstaller
             $state['phase'] = 'backup'; Files::writeJson($journal, $state);
             $this->move($staged, $target); $newMoved = true;
             $state['phase'] = 'migration'; Files::writeJson($journal, $state);
-            $afterSwap($target);
+            $afterSwap($target, function (string $phase) use (&$state, $journal): void {
+                if (!in_array($phase, ['migration', 'cache', 'metadata'], true)) throw new \LogicException('Invalid installation phase');
+                $state['phase'] = $phase;
+                Files::writeJson($journal, $state);
+            });
         } catch (\Throwable $e) {
             try {
                 if ($newMoved) $this->move($target, $staged);
@@ -40,12 +44,13 @@ class ModuleInstaller
                 $state['filesRestored'] = true;
             } catch (\Throwable $rollbackError) { $state['filesRestored'] = false; }
             $state['failedPhase'] = $state['phase']; $state['phase'] = 'failed';
+            $state['failure'] = Failure::diagnostic($e);
             Files::writeJson($journal, $state);
             // A migration can have changed schema without a transactional rollback.
-            if ($state['failedPhase'] !== 'migration' && $state['filesRestored']) unlink($journal);
+            if (!in_array($state['failedPhase'], ['migration', 'cache', 'metadata'], true) && $state['filesRestored']) unlink($journal);
             throw new Failure($state['filesRestored']
                 ? 'Installation failed. Previous files were restored; database changes may require manual recovery.'
-                : 'Installation failed and file recovery failed. Stop and restore from the operation journal.');
+                : 'Installation failed and file recovery failed. Stop and restore from the operation journal.', [], $e);
         }
         $state['phase'] = 'complete'; Files::writeJson($journal, $state);
         if (!unlink($journal)) throw new Failure('Operation journal could not be finalized.');

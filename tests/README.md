@@ -10,6 +10,8 @@ php tests/run.php
 
 Keine Serverzugangsdaten und keine Netzwerkverbindungen erforderlich. Temporäre Dateien werden nach Testende entfernt.
 
+Die Serviceprüfungen decken auch den Erhalt der Fehlerkette, getrennte Cache-Phasen, die fortbestehende Wiederherstellungssperre und das Ausblenden beliebiger Exception-Texte ab. Die Integration prüft zusätzlich HumHub-Statusmeldungen, den dauerhaften HTML-escaped Fehlerhinweis und lesbare Wiederherstellungsdetails. Eine vorhandene Selbstupdate-Zuordnung bleibt erhalten; nur der Test einer neu angelegten Selbstupdate-Zuordnung wird dann übersprungen.
+
 ## HumHub-/MariaDB-Integration
 
 Nur in einer ausdrücklich für Entwicklung eingerichteten HumHub-CE-1.18.5-Testinstallation mit aktiviertem GitHub-Modulmanager und lokalem Admin-Konto `admin` ausführen. Die Datenbank-DSN muss zur zusätzlichen Absicherung `test` enthalten. Die Umgebungsvariablen dienen als explizite Freigabe, nicht als Erkennung einer Produktionsumgebung.

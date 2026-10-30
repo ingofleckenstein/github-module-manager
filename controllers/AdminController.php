@@ -38,7 +38,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
             $repository=$id ? $this->repository($id) : null;
             $this->assertNotSelfRepository($repository);
             return $this->render('add',['repository'=>$repository,'discovery'=>null]);
-        } catch (Throwable $e) { return $this->error($e,['index']); }
+        } catch (\Throwable $e) { return $this->error($e,['index']); }
     }
     public function actionDiscover()
     {
@@ -74,7 +74,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
         try {
             if (Yii::$app->request->post('trust') !== '1') throw new Failure('Confirm that you trust this repository and have a database backup.');
             $r=(new Workflow())->install((string)Yii::$app->request->post('token'),Yii::$app->request->post('localChanges') === '1');
-            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base',$r->module_id === Workflow::MANAGER_ID ? 'Manager self-update installed. The new version will be used on the next request.' : 'Module files installed and migrations completed. Activation remains unchanged; new modules can be enabled under Administration → Modules.'));
+            $this->view->success(Yii::t('GithubModuleManagerModule.base',$r->module_id === Workflow::MANAGER_ID ? 'Manager self-update installed. The new version will be used on the next request.' : 'Module files installed and migrations completed. Activation remains unchanged; new modules can be enabled under Administration → Modules.'));
             return $this->redirect(['view','id'=>$r->id]);
         } catch (\Throwable $e) { return $this->error($e,['index']); }
     }
@@ -87,7 +87,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
     {
         $r=$this->repository($id);
         $logs=UpdateLog::find()->where(['module_id'=>$r->module_id])->orderBy(['id'=>SORT_DESC])->limit(100)->all();
-        return $this->render('view',['repository'=>$r,'logs'=>$logs]);
+        return $this->render('view',['repository'=>$r,'logs'=>$logs,'operation'=>(new Workflow())->operation($r)]);
     }
     public function actionCheck(int $id)
     {
@@ -100,7 +100,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
                 'local_changes'=>'Update check completed. Local changes were detected.',
                 default=>'Update check completed.',
             };
-            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base',$message,['version'=>$r->last_remote_version]));
+            $this->view->success(Yii::t('GithubModuleManagerModule.base',$message,['version'=>$r->last_remote_version]));
             return $this->redirect(['view','id'=>$id]);
         }
         catch (\Throwable $e) { return $this->error($e,['view','id'=>$id]); }
@@ -111,14 +111,14 @@ class AdminController extends \humhub\modules\admin\components\Controller
         foreach (Repository::find()->all() as $r) {
             try { $workflow->check($r); } catch (\Throwable $e) { ++$failures; }
         }
-        Yii::$app->session->setFlash($failures ? 'warning' : 'success',Yii::t('GithubModuleManagerModule.base','Update checks finished. Failed checks: {count}',['count'=>$failures]));
+        $this->view->setStatusMessage($failures ? 'warn' : 'success',Yii::t('GithubModuleManagerModule.base','Update checks finished. Failed checks: {count}',['count'=>$failures]));
         return $this->redirect(['index']);
     }
     public function actionRescan(int $id)
     {
         try {
             (new Workflow())->rescan($this->repository($id));
-            Yii::$app->session->setFlash('success',Yii::t('GithubModuleManagerModule.base','Local module data was re-read.'));
+            $this->view->success(Yii::t('GithubModuleManagerModule.base','Local module data was re-read.'));
             return $this->redirect(['view','id'=>$id]);
         } catch (\Throwable $e) { return $this->error($e,['view','id'=>$id]); }
     }
@@ -128,7 +128,7 @@ class AdminController extends \humhub\modules\admin\components\Controller
         foreach (Repository::find()->all() as $r) {
             try { $workflow->rescan($r); ++$updated; } catch (\Throwable $e) { ++$failures; }
         }
-        Yii::$app->session->setFlash($failures ? 'warning' : 'success',Yii::t('GithubModuleManagerModule.base','Local module data was re-read. Updated: {updated}, failed: {failed}.',['updated'=>$updated,'failed'=>$failures]));
+        $this->view->setStatusMessage($failures ? 'warn' : 'success',Yii::t('GithubModuleManagerModule.base','Local module data was re-read. Updated: {updated}, failed: {failed}.',['updated'=>$updated,'failed'=>$failures]));
         return $this->redirect(['index']);
     }
     public function actionDetach(int $id)
@@ -166,8 +166,12 @@ class AdminController extends \humhub\modules\admin\components\Controller
     {
         $key=$e instanceof Failure ? $e->key : 'Unexpected operation error. Review the operation journal and server log.';
         // Never record arbitrary remote PHP exception bodies or HTTP response headers.
-        Yii::error(['phase'=>$this->action->id,'result'=>'error','type'=>get_class($e),'message'=>$key],'github-module-manager');
-        Yii::$app->session->setFlash('error',Yii::t('GithubModuleManagerModule.base',$key,$e instanceof Failure ? $e->parameters : []));
+        $diagnostic = Failure::diagnostic($e);
+        Yii::error(['phase'=>$this->action->id,'result'=>'error','type'=>get_class($e),'message'=>$key,'diagnostic'=>$diagnostic],'github-module-manager');
+        $message = Yii::t('GithubModuleManagerModule.base',$key,$e instanceof Failure ? $e->parameters : []);
+        if ($diagnostic['reason'] !== $key) $message .= ' ' . Yii::t('GithubModuleManagerModule.base',$diagnostic['reason']);
+        $this->view->error($message);
+        Yii::$app->session->setFlash('gmm-error',$message);
         return $this->redirect($route);
     }
 }

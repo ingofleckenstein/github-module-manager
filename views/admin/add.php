@@ -3,6 +3,7 @@
 use yii\helpers\Html;
 $t=static fn($s)=>Yii::t('GithubModuleManagerModule.base',$s);
 ?>
+<?= $this->render('_messages') ?>
 <div class="panel panel-default"><div class="panel-heading"><?= Html::encode($t('Add or change repository')) ?></div><div class="panel-body">
 <p><?= Html::encode($t('Only public repositories are supported. Your private repositories must be published or installed manually.')) ?></p>
 <?= Html::beginForm(['discover'],'post') ?>

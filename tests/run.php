@@ -60,6 +60,26 @@ try {
     file_put_contents($target.'/local.txt','changed'); reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null),'Local modification protection'); unlink($target.'/local.txt');
     $lock=new Lock($runtime,'example-module'); reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null),'Concurrent update blocked'); unset($lock);
     $before=Files::hash($target); reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null,fn()=>throw new Failure('requirements')),'Requirements failure'); check(Files::hash($target)===$before,'Requirements do not exchange files');
+    $hash=Files::hash($target);
+    $cause=new Failure('Application cache could not be cleared.');
+    try {
+        $installer->install('example-module',$stage,$target,$hash,function($path,$phase) use ($cause) { $phase('cache'); throw $cause; });
+        check(false,'Expected cache failure');
+    } catch (Failure $error) {
+        check($error->getPrevious()===$cause,'Original cause retained after restoration');
+    }
+    $state=json_decode(file_get_contents($runtime.'/operations/example-module.json'),true);
+    check($state['failedPhase']==='cache','Cache failure has its own journal phase');
+    check($state['failure']['reason']==='Application cache could not be cleared.','Known cause stored in journal');
+    check(Files::hash($target)===$hash,'Cache failure restores files');
+    reject(fn()=>$installer->install('example-module',$stage,$target,$hash,fn()=>null),'Cache recovery still blocks further updates');
+    unlink($runtime.'/operations/example-module.json');
+    $secret='SECRET-test-password-and-http-response';
+    $diagnostic=Failure::diagnostic(new Failure('Published assets could not be cleared.',[],new RuntimeException($secret)));
+    check($diagnostic['reason']==='Published assets could not be cleared.','Known cache step retained around arbitrary exception');
+    check(!str_contains(json_encode($diagnostic),$secret),'Arbitrary exception text excluded from diagnostics');
+    $diagnostic=Failure::diagnostic(new Failure($secret));
+    check(!str_contains(json_encode($diagnostic),$secret),'Unknown Failure text excluded from diagnostics');
     foreach (['app','runtime','web','humhub','github-module-manager'] as $id) reject(fn()=>ModuleValidator::id($id),'Reserved module ID');
     zipFixture($tmp.'/manager.zip',moduleFiles('1.0.0','github-module-manager')); $manager=$validator->extract($tmp.'/manager.zip',$tmp.'/manager');
     reject(fn()=>(new ModuleValidator())->inspect($manager),'Manager remains protected for ordinary imports');

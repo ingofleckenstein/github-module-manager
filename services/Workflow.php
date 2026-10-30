@@ -8,6 +8,22 @@ use Yii;
 class Workflow
 {
     public const MANAGER_ID = 'github-module-manager';
+    /** Read recovery information for an administrator without changing the journal. */
+    public function operation(Repository $repository): ?array
+    {
+        ModuleValidator::id($repository->module_id, $this->isSelf($repository));
+        $file = $this->paths->runtime() . '/operations/' . $repository->module_id . '.json';
+        if (!is_file($file)) return null;
+        $state = json_decode(file_get_contents($file), true);
+        $phase = is_array($state) ? ($state['failedPhase'] ?? $state['phase'] ?? 'unknown') : 'unknown';
+        $messages = require dirname(__DIR__) . '/messages/de/base.php';
+        $reason = $state['failure']['reason'] ?? null;
+        return [
+            'phase' => in_array($phase, ['prepared','backup','migration','cache','metadata','complete'], true) ? $phase : 'unknown',
+            'filesRestored' => ($state['filesRestored'] ?? null) === true,
+            'reason' => is_string($reason) && isset($messages[$reason]) ? $reason : null,
+        ];
+    }
     public function __construct(private ?RepositoryProviderInterface $provider = null, private ?Paths $paths = null, private ?HumHubBridge $bridge = null)
     {
         $this->paths ??= new Paths(); $this->bridge ??= new HumHubBridge();
@@ -174,13 +190,16 @@ class Workflow
         $selfUpdate = !empty($p['selfUpdate']) && $p['info']['id'] === self::MANAGER_ID && $this->isSelf($r);
         if (!empty($p['selfUpdate']) && !$selfUpdate) throw new Failure('Manager self-update configuration changed. Inspect the repository again.');
         $this->paths->target($p['info']['id'],$p['target'],$selfUpdate);
-        $dir=dirname($p['module'],2); $id=$p['info']['id']; $config=[];
+        $dir=dirname($p['module'],2); $id=$p['info']['id']; $config=[]; $filesExchanged=false;
         $this->log($p,'start','installing');
         try {
             $installer=new ModuleInstaller($this->paths->runtime(),$this->limit('backupRetention',3));
-            $warnings=$installer->install($id,$p['module'],$p['target'],$p['localHash'],function($target) use ($p,$r,$id,&$config) {
+            $warnings=$installer->install($id,$p['module'],$p['target'],$p['localHash'],function($target,$phase) use ($p,$r,$id,&$config,&$filesExchanged) {
+                $filesExchanged=true;
                 $this->bridge->migrate($id,$target,$config);
+                $phase('cache');
                 $this->bridge->clear();
+                $phase('metadata');
                 $this->source($r,$p); $r->installed_version=$p['info']['version']; $r->installed_commit_sha=$p['sha'];
                 $r->file_hash=Files::hash($target); $r->last_updated_at=time(); $r->status='current';
                 $tx=Yii::$app->db->beginTransaction();
@@ -192,10 +211,14 @@ class Workflow
         } catch (\Throwable $e) {
             if (!$r->isNewRecord) { $r->refresh(); $r->status='error'; $r->save(false,['status']); }
             $journal=$this->paths->runtime().'/operations/'.$id.'.json';
-            $state=is_file($journal) ? json_decode(file_get_contents($journal),true) : [];
-            $this->log($p,$state['failedPhase'] ?? 'install','error',$e instanceof Failure ? $e->key : 'Unexpected installation error.');
+            $state=$filesExchanged && is_file($journal) ? json_decode(file_get_contents($journal),true) : [];
+            $reason = $state['failure']['reason'] ?? ($e instanceof Failure ? $e->key : 'Unexpected installation error.');
+            $this->log($p,$state['failedPhase'] ?? 'install','error',$reason);
+            Yii::error(['module'=>$id,'phase'=>$state['failedPhase'] ?? 'install','result'=>'error','diagnostic'=>Failure::diagnostic($e)],'github-module-manager');
             // Refresh discovery after restoration; do not suppress a second failure.
-            try { $this->bridge->clear(); } catch (\Throwable $cacheError) { Yii::error(['module'=>$id,'phase'=>'recovery-cache','result'=>'error'],'github-module-manager'); }
+            if ($filesExchanged) {
+                try { $this->bridge->clear(); } catch (\Throwable $cacheError) { Yii::error(['module'=>$id,'phase'=>'recovery-cache','result'=>'error','step'=>$cacheError instanceof Failure ? $cacheError->key : null,'diagnostic'=>Failure::diagnostic($cacheError)],'github-module-manager'); }
+            }
             throw $e;
         } finally {
             if (is_dir($dir)) Files::remove($dir);

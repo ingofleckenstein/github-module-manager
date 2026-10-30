@@ -9,14 +9,16 @@ define('YII_DEBUG',true); define('YII_ENV','test');
 require $protected.'/vendor/autoload.php'; require $protected.'/vendor/yiisoft/yii2/Yii.php';
 Yii::setAlias('@humhub',$protected.'/humhub');
 $bootstrap=new humhub\services\BootstrapService(true);
-$app=new humhub\components\console\Application($bootstrap->getConfig('console'));
+$app=new class($bootstrap->getConfig('console')) extends humhub\components\console\Application {
+    public function getSession() { return $this->get('session'); }
+};
 if (!str_contains($app->db->dsn,'test')) throw new RuntimeException('Only a test database is allowed');
 $app->set('user',['class'=>yii\web\User::class,'identityClass'=>humhub\modules\user\models\User::class,'enableSession'=>false]);
 $admin=humhub\modules\user\models\User::findOne(['username'=>'admin']);
 if (!$admin || !$admin->isSystemAdmin()) throw new RuntimeException('Local test admin required');
 $app->user->setIdentity($admin);
 $app->set('assetManager',['class'=>humhub\components\AssetManager::class,'basePath'=>$protected.'/../assets','baseUrl'=>'/assets']);
-use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInterface,Files,Failure,Paths,ModuleValidator};
+use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInterface,Files,Failure,Paths,ModuleValidator,HumHubBridge};
 use humhub\modules\githubmodulemanager\models\{Repository,UpdateLog};
 class FixtureProvider implements RepositoryProviderInterface
 {
@@ -90,7 +92,36 @@ try {
     $p=$workflow->inspect($url,'main',$r);
     try { $workflow->attach($p['token']); throw new RuntimeException('Expected recovery guard'); }
     catch (Failure $e) { ensure($r->status==='error','Recovery blocks mapping changes'); }
+    $blockedBridge=new class extends HumHubBridge {
+        public int $clears=0;
+        public function clear(): void { ++$this->clears; }
+    };
+    $journalBefore=file_get_contents($runtime.'/operations/gmm-fixture.json');
+    try { (new Workflow($provider,null,$blockedBridge))->install($p['token'],false); throw new RuntimeException('Expected blocked installation'); }
+    catch (Failure $e) { ensure($e->key==='A previous operation needs manual recovery. See the operation journal.','Blocked update explains the recovery guard'); }
+    ensure($blockedBridge->clears===0 && file_get_contents($runtime.'/operations/gmm-fixture.json')===$journalBefore,'Blocked attempt neither clears caches nor changes the recovery journal');
     unlink($runtime.'/operations/gmm-fixture.json');
+    $assets=$app->assetManager;
+    $app->set('assetManager',new class extends humhub\components\AssetManager {
+        public function clear() { throw new RuntimeException('SECRET-raw-error-response'); }
+    });
+    try { (new HumHubBridge())->clear(); throw new RuntimeException('Expected asset cleanup failure'); }
+    catch (Failure $error) {
+        ensure($error->key==='Published assets could not be cleared.','Cache errors identify the exact failing step');
+        ensure(!str_contains(json_encode(Failure::diagnostic($error)),'SECRET-raw-error-response'),'Cache diagnostics omit raw exception content');
+    } finally { $app->set('assetManager',$assets); }
+    $app->set('session',['class'=>yii\web\Session::class,'useCookies'=>false,'cacheLimiter'=>'']);
+    $errorController=new class('admin',$app->getModule('github-module-manager')) extends \humhub\modules\githubmodulemanager\controllers\AdminController {
+        public function redirect($url,$statusCode=302) { return $url; }
+    };
+    $errorController->action=new yii\base\Action('install',$errorController);
+    $errorMethod=new ReflectionMethod(\humhub\modules\githubmodulemanager\controllers\AdminController::class,'error');
+    $errorMethod->invoke($errorController,new Failure('Installation failed. Previous files were restored; database changes may require manual recovery.',[],new Failure('Application cache could not be cleared.')),['index']);
+    ensure(isset($app->session->getFlash('view-status',null,false)['error']),'Errors use HumHub status notifications');
+    ensure(str_contains($app->session->getFlash('gmm-error',null,false),'cache'),'Persistent error includes the original known cause');
+    $app->session->setFlash('gmm-error','<script>unsafe</script>');
+    $alert=$app->view->renderFile($managerTarget.'/views/admin/_messages.php');
+    ensure(str_contains($alert,'role="alert"') && str_contains($alert,'&lt;script&gt;') && !str_contains($alert,'<script>'),'Persistent error is visible and HTML escaped');
     $workflow->detach($r); ensure(is_dir($target),'Detach preserves module files');
     $p=$workflow->inspect($url,'main');
     $r=$workflow->attach($p['token']);
@@ -98,10 +129,18 @@ try {
     $workflow->check($r); $r->refresh(); ensure($r->status==='current','Unknown SHA with equal module versions is current');
     $metadata=json_decode(file_get_contents($target.'/module.json'),true); $metadata['version']='0.1.4'; file_put_contents($target.'/module.json',json_encode($metadata));
     $workflow->rescan($r); $r->refresh(); ensure($r->installed_version==='0.1.4','Local rescan reads a changed module.json');
-    if (Repository::findOne(['module_id'=>Workflow::MANAGER_ID])) throw new RuntimeException('Manager self-update mapping already exists; preserve it and run this test in a clean test installation.');
-    $provider->moduleId=Workflow::MANAGER_ID; $provider->version='0.1.5';
-    $self=$workflow->configureSelf('https://github.com/example/github-module-manager','main'); $selfFixtureCreated=true;
-    $workflow->check($self); $self->refresh(); ensure($self->status==='update_available','Manager self-repository is checked through the protected path');
+    if (!Repository::findOne(['module_id'=>Workflow::MANAGER_ID])) {
+        $provider->moduleId=Workflow::MANAGER_ID; $provider->version='99.0.0';
+        $self=$workflow->configureSelf('https://github.com/example/github-module-manager','main'); $selfFixtureCreated=true;
+        $workflow->check($self); $self->refresh(); ensure($self->status==='update_available','Manager self-repository is checked through the protected path');
+    } else {
+        echo "Existing manager self-update mapping preserved; fixture mapping check skipped.\n";
+    }
+    ensure($workflow->operation($r)===null,'No recovery banner without an operation journal');
+    Files::writeJson($runtime.'/operations/gmm-fixture.json',['phase'=>'failed','failedPhase'=>'cache','filesRestored'=>true,'failure'=>['reason'=>'Application cache could not be cleared.']]);
+    $operation=$workflow->operation($r);
+    ensure($operation['phase']==='cache' && $operation['filesRestored'] && $operation['reason']==='Application cache could not be cleared.','Recovery details expose known cache failure without removing the guard');
+    unlink($runtime.'/operations/gmm-fixture.json');
     $controller=new \humhub\modules\githubmodulemanager\controllers\AdminController('admin',$app->getModule('github-module-manager'));
     $access=$controller->behaviors()['access']['rules'][0]['matchCallback'];
     ensure($access(),'System administrator allowed');

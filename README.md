@@ -2,7 +2,15 @@
 
 Dieses **HumHub-Modul** ermöglicht Systemadministrator*innen, Module aus **öffentlichen GitHub-Repositories** zu prüfen, zu installieren und anhand neuer Branch-Commits zu aktualisieren. Es wird in HumHub installiert und ist kein PeerTube-Plugin.
 
-Version **0.1.8**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+Version **0.1.10**. Zielplattform: **HumHub Community Edition 1.18.5**, PHP **8.2+**, Erweiterungen **cURL** und **ZIP**. Entwickelt und integriert geprüft mit PHP 8.3.6 und MariaDB 10.11. Auf der lokalen Standard-Testcommunity ist es unter **Administration → GitHub-Modulmanager** erreichbar.
+
+## Version 0.1.10: Sichtbare Fehler und genauere Wiederherstellungsprotokolle
+
+Statusmeldungen verwenden HumHubs Benachrichtigungs-API. Fehler bleiben zusätzlich als Hinweis auf der folgenden Verwaltungsseite sichtbar. Die Moduldetails zeigen offene Wiederherstellungsvorgänge, den zuletzt bekannten Schritt und den Stand der Dateiwiederherstellung. Die Sperre wird dabei nicht aufgehoben.
+
+Neue Vorgangsprotokolle unterscheiden Datenbankmigration, Cache-Bereinigung und Speichern des Installationsstands. Die ursprüngliche Exception bleibt in der Fehlerkette erhalten; protokolliert werden ausschließlich bekannte statische Fehlermeldungen, Fehlerklasse, Dateiname und Zeile, keine beliebigen Exception-Texte oder HTTP-Antworten. Fehler bei Modulcache, Anwendungscache, Assets und OPCache werden einzeln benannt. Ein bereits vor dem Dateitausch blockierter Versuch löst keine erneute Cache-Bereinigung aus.
+
+Ältere Vorgangsprotokolle enthalten diese Details nicht. Ihre ursprüngliche Fehlerursache lässt sich dadurch nicht nachträglich rekonstruieren. Keine Datenbankmigration erforderlich.
 
 ## Funktionsumfang
 

@@ -1,6 +1,13 @@
 <?php
 // SPDX-License-Identifier: AGPL-3.0-only
 return [
+'Failed step'=>'Fehlgeschlagener Schritt',
+'Previous module files were restored.'=>'Die vorherigen Moduldateien wurden wiederhergestellt.',
+'File restoration has not been confirmed.'=>'Die Wiederherstellung der Moduldateien ist nicht bestätigt.',
+'Check the database migration history and the operation journal under protected/runtime/github-module-manager/operations before allowing another update. Older journals do not distinguish migration, cache and metadata failures.'=>'Prüfe den Stand der Datenbankmigrationen und das Vorgangsprotokoll unter protected/runtime/github-module-manager/operations, bevor du ein weiteres Update freigibst. Ältere Protokolle unterscheiden nicht zwischen Fehlern bei Migration, Cache-Bereinigung und Speichern des Installationsstands.',
+'Module cache could not be cleared.'=>'Der Modulcache konnte nicht geleert werden.',
+'Published assets could not be cleared.'=>'Die veröffentlichten CSS-, JavaScript- und Bilddateien konnten nicht bereinigt werden. Prüfe die Schreibrechte im assets-Verzeichnis.',
+'cache'=>'Cache-Bereinigung','metadata'=>'Speichern des Installationsstands','migration'=>'Datenbankmigration',
 'PHP 8.2 or newer with cURL and ZIP is required.'=>'PHP 8.2 oder neuer mit cURL und ZIP wird benötigt.',
 'Module ID conflicts with an existing module or application alias.'=>'Die Modul-ID kollidiert mit einem vorhandenen Modul oder Anwendungsalias.',
 'migration'=>'Migration','backup'=>'Backup','prepared'=>'Vorbereitet','cleanup'=>'Bereinigung','warning'=>'Warnung',

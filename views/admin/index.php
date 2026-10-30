@@ -3,6 +3,7 @@
 use yii\helpers\Html;
 $t=static fn($s,$p=[])=>Yii::t('GithubModuleManagerModule.base',$s,$p);
 ?>
+<?= $this->render('_messages') ?>
 <div class="panel panel-default"><div class="panel-heading"><?= Html::encode($t('GitHub Module Manager')) ?></div><div class="panel-body">
 <p><?= Html::encode($t('Manage trusted public GitHub branches. Installation does not activate modules.')) ?></p>
 <?= Html::a(Html::encode($t('Add repository')),['add'],['class'=>'btn btn-primary']) ?>

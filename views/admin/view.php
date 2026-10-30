@@ -3,7 +3,17 @@
 use yii\helpers\Html;
 $t=static fn($s)=>Yii::t('GithubModuleManagerModule.base',$s); $r=$repository;
 ?>
+<?= $this->render('_messages') ?>
 <div class="panel panel-default"><div class="panel-heading"><?= Html::encode($r->module_id) ?></div><div class="panel-body">
+<?php if ($operation): ?>
+<div class="alert alert-danger" role="alert">
+<strong><?= Html::encode($t('A previous operation needs manual recovery. See the operation journal.')) ?></strong>
+<p><?= Html::encode($t('Failed step')) ?>: <?= Html::encode($t($operation['phase'])) ?>.</p>
+<?php if ($operation['reason']): ?><p><?= Html::encode($t($operation['reason'])) ?></p><?php endif; ?>
+<p><?= Html::encode($t($operation['filesRestored'] ? 'Previous module files were restored.' : 'File restoration has not been confirmed.')) ?></p>
+<p><?= Html::encode($t('Check the database migration history and the operation journal under protected/runtime/github-module-manager/operations before allowing another update. Older journals do not distinguish migration, cache and metadata failures.')) ?></p>
+</div>
+<?php endif; ?>
 <dl><?php foreach (['Installed'=>$r->installed_version,'Installed commit'=>$r->installed_commit_sha ?: $t('Unknown'),'Remote'=>$r->last_remote_version ?: $t('Not checked'),'Remote commit'=>$r->last_remote_commit_sha,'Branch'=>$r->channel_value,'Status'=>$t($r->status),'Last checked'=>$r->last_checked_at ? Yii::$app->formatter->asDatetime($r->last_checked_at) : $t('Not checked'),'Last updated'=>$r->last_updated_at ? Yii::$app->formatter->asDatetime($r->last_updated_at) : $t('Unknown')] as $label=>$value): ?><dt><?= Html::encode($t($label)) ?></dt><dd><?= Html::encode($value) ?></dd><?php endforeach ?></dl>
 <p><?= Html::a(Html::encode($r->repository_url),$r->repository_url,['rel'=>'noopener noreferrer','target'=>'_blank']) ?></p>
 <?php if ($r->module_id === 'github-module-manager'): ?><p class="alert alert-warning"><?= Html::encode($t('This update replaces the running manager only after review. The new code is used from the next request; keep the generated backup until it has been checked.')) ?></p><?php endif ?>

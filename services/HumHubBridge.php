@@ -104,11 +104,19 @@ class HumHubBridge
     }
     public function clear(): void
     {
-        Yii::$app->moduleManager->flushCache();
-        if (Yii::$app->cache->flush() === false) throw new Failure('Application cache could not be cleared.');
-        Yii::$app->assetManager->clear();
+        $this->clearStep('Module cache could not be cleared.', fn() => Yii::$app->moduleManager->flushCache());
+        $this->clearStep('Application cache could not be cleared.', fn() => Yii::$app->cache->flush());
+        $this->clearStep('Published assets could not be cleared.', fn() => Yii::$app->assetManager->clear());
         if (function_exists('opcache_reset') && filter_var(ini_get('opcache.enable'), FILTER_VALIDATE_BOOLEAN) && PHP_SAPI !== 'cli') {
-            if (!opcache_reset()) throw new Failure('OPCache could not be reset.');
+            $this->clearStep('OPCache could not be reset.', fn() => opcache_reset());
+        }
+    }
+    private function clearStep(string $message, callable $clear): void
+    {
+        try {
+            if ($clear() === false) throw new Failure($message);
+        } catch (\Throwable $error) {
+            throw new Failure($message, [], $error);
         }
     }
 }
