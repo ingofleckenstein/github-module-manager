@@ -15,6 +15,17 @@ class HumHubBridge
         // Deliberate execution only inside the confirmed installation action.
         $config = require $path . '/config.php';
         if (!is_array($config) || ($config['id'] ?? null) !== $id || empty($config['class']) || !empty($config['isCoreModule']) || !empty($config['isInstallerModule'])) throw new Failure('Module ID and config.php do not match.');
+        $metadata = json_decode(file_get_contents($path . '/module.json'), true, 32, JSON_THROW_ON_ERROR);
+        if (!empty($metadata['humhub']['modules'])) {
+            if (!class_exists(\humhub\services\ModuleDependencyService::class)) {
+                throw new Failure('Module requirements were not satisfied. Install dependencies manually.');
+            }
+            $dependencies = \humhub\services\ModuleDependencyService::forModulePath($path);
+            if ($dependencies->getUnmetDependencies() !== []) {
+                throw new Failure('Module requirements were not satisfied. Install dependencies manually.');
+            }
+            $dependencies->registerDependencies();
+        }
         if (is_file($path . '/requirements.php')) {
             $result = require $path . '/requirements.php';
             if (is_string($result) || $result === false) throw new Failure('Module requirements were not satisfied. Install dependencies manually.');

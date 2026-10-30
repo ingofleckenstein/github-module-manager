@@ -6,6 +6,7 @@ if (getenv('GMM_INTEGRATION') !== '1' || !getenv('HUMHUB_ROOT')) {
 }
 $protected=rtrim(getenv('HUMHUB_ROOT'),'/').'/protected';
 define('YII_DEBUG',true); define('YII_ENV','test');
+define('YII_ENABLE_ERROR_HANDLER', false);
 require $protected.'/vendor/autoload.php'; require $protected.'/vendor/yiisoft/yii2/Yii.php';
 Yii::setAlias('@humhub',$protected.'/humhub');
 $bootstrap=new humhub\services\BootstrapService(true);
@@ -17,7 +18,7 @@ $app->set('user',['class'=>yii\web\User::class,'identityClass'=>humhub\modules\u
 $admin=humhub\modules\user\models\User::findOne(['username'=>'admin']);
 if (!$admin || !$admin->isSystemAdmin()) throw new RuntimeException('Local test admin required');
 $app->user->setIdentity($admin);
-$app->set('assetManager',['class'=>humhub\components\AssetManager::class,'basePath'=>$protected.'/../assets','baseUrl'=>'/assets']);
+$app->set('assetManager',['class'=>(class_exists(humhub\components\assets\AssetManager::class) ? humhub\components\assets\AssetManager::class : humhub\components\AssetManager::class),'basePath'=>$protected.'/../assets','baseUrl'=>'/assets']);
 use humhub\modules\githubmodulemanager\services\{Workflow,RepositoryProviderInterface,Files,Failure,Paths,ModuleValidator,HumHubBridge};
 use humhub\modules\githubmodulemanager\models\{Repository,UpdateLog};
 class FixtureProvider implements RepositoryProviderInterface
@@ -62,6 +63,16 @@ if (file_exists($target) || Repository::findOne(['module_id'=>'gmm-fixture'])) t
 $runtime=(new Paths())->runtime();
 $selfFixtureCreated=false;
 try {
+    $dependencyFixture = $runtime . '/dependency-fixture';
+    Files::directory($dependencyFixture);
+    file_put_contents($dependencyFixture . '/config.php', "<?php return ['id'=>'gmm-dependency-fixture','class'=>'Fixture'];");
+    file_put_contents($dependencyFixture . '/module.json', json_encode(['id'=>'gmm-dependency-fixture','humhub'=>['modules'=>['gmm-missing-dependency'=>[]]]]));
+    try {
+        (new HumHubBridge())->requirements($dependencyFixture, 'gmm-dependency-fixture');
+        throw new RuntimeException('Missing declared dependency was accepted');
+    } catch (Failure $e) {
+        ensure($e->key === 'Module requirements were not satisfied. Install dependencies manually.', 'Missing declared dependencies are rejected on both core versions');
+    } finally { Files::remove($dependencyFixture); }
     $managerTarget=(new Paths())->managerTarget();
     ensure($managerTarget===realpath($app->getModule('github-module-manager')->getBasePath()),'Manager target is the loaded module path');
     ensure((new ModuleValidator())->inspect($managerTarget,true)['id']==='github-module-manager','Manager metadata is accepted only in self-update mode');
@@ -102,7 +113,7 @@ try {
     ensure($blockedBridge->clears===0 && file_get_contents($runtime.'/operations/gmm-fixture.json')===$journalBefore,'Blocked attempt neither clears caches nor changes the recovery journal');
     unlink($runtime.'/operations/gmm-fixture.json');
     $assets=$app->assetManager;
-    $app->set('assetManager',new class extends humhub\components\AssetManager {
+    $app->set('assetManager',new class extends yii\base\Component {
         public function clear() { throw new RuntimeException('SECRET-raw-error-response'); }
     });
     try { (new HumHubBridge())->clear(); throw new RuntimeException('Expected asset cleanup failure'); }
